@@ -4,7 +4,9 @@
 
 ## Stav
 
-Založeno 10. listopadu 2026. Zatím jde o přípravu projektu, nikoli funkční nebo nainstalovaný skill či plugin. Přístup k archivům a kompatibilita původních skriptů dosud nejsou ověřené v cílovém prostředí.
+První lokální prototyp, 10. listopadu 2026. Obsahuje převedený pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci pramenů s historií. Nejde o publikovaný plugin. Živý přístup k archivům, GEDCOM a přenos soukromého bádání přes trvalé úložiště do nové konverzace ještě nejsou ověřené.
+
+Zdroj postupu je ve [skills/family-tree-chatgpt](skills/family-tree-chatgpt). Přehled převodu a odložených nástrojů je v [docs/PORTING.md](docs/PORTING.md), výsledky ověření v [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Cíl první verze
 
@@ -21,9 +23,9 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
 
 ## Plán
 
-- [ ] Inventarizovat původní návody, skripty, závislosti a licence.
-- [ ] Převést základní pracovní postup pro ChatGPT a odstranit závislosti na Claude.
-- [ ] Vybrat a otestovat minimální sadu nástrojů pro první zápis.
+- [x] Vytvořit katalog původních nástrojů, vybrat minimum a ověřit jeho závislosti a licenci.
+- [x] Převést základní pracovní postup pro ChatGPT a odstranit závislosti na Claude.
+- [x] Vybrat a lokálně otestovat minimum pro první zápis na syntetických datech.
 - [ ] Ověřit přístup k Opavskému archivu a práci se snímkem.
 - [ ] Navrhnout a vyzkoušet trvalé ukládání rozpracovaného bádání.
 - [ ] Dokončit první ověřený průchod a kontrolu navázání.
@@ -39,6 +41,19 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
 - Uchovávat citace a zaznamenávat i neúspěšná hledání včetně prohledaného rozsahu.
 - Respektovat limity archivů, používat mezipaměť a neobcházet blokace.
 
+## Lokální použití
+
+Vyžaduje Python 3.11+ a pro výřezy Pillow. Testované prostředí: Python 3.12.14 a Pillow 13.0.0. Příkazy pro zápisník používají pouze standardní knihovnu Pythonu.
+
+```sh
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani init
+python skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani resume
+```
+
+Cesta je příklad; zvol vlastní soukromou složku mimo git repozitáře. Další příkazy a formát záznamu jsou v [datové referenci](skills/family-tree-chatgpt/references/data.md). Skripty samy nečtou písmo, neověřují totožnost osoby a neprovádějí cloudové ukládání. Kontrola dat není důkazem správného genealogického závěru.
+
 ## Kód a rodinná data
 
 Tento repozitář slouží pro obecné návody, kód a syntetická testovací data. Rodinné GEDCOM soubory, originální dokumenty, snímky, přepisy a badatelské deníky patří do samostatného soukromého úložiště. Pravidla v `.gitignore` jsou pouze pomocná; před commitem je nutné zkontrolovat jeho obsah.
@@ -47,4 +62,4 @@ Tento repozitář slouží pro obecné návody, kód a syntetická testovací da
 
 Výchozím projektem je **Rodokmen** od **Jindřicha Šaršona**, zveřejněný pod licencí MIT. Při převzetí kódu nebo podstatných částí dokumentace je nutné přiložit úplné původní licenční a autorské oznámení a zaznamenat původ převzatých souborů.
 
-V tomto úvodním commitu není původní kód ani dokumentace zkopírovaná. Referenční revize a rozsah převzatých částí budou uvedeny při jejich importu.
+Referenční revize je `0fb0c0379abf51a9af92d363992799fcd38eb23a`. Mapování adaptovaných částí je v [přehledu původu](skills/family-tree-chatgpt/references/upstream.md); úplné původní MIT oznámení je v [LICENSE](LICENSE) a přiložené také k samotnému balíčku.

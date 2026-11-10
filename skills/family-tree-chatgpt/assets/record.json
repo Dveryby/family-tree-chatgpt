@@ -1,0 +1,23 @@
+{
+  "id": "replace_with_record_id",
+  "source": {
+    "archive": "",
+    "reference": "",
+    "page": "",
+    "url": "",
+    "accessed_on": "",
+    "file": "",
+    "crop": ""
+  },
+  "reading_status": "unread",
+  "visual_review": false,
+  "transcription": "",
+  "translation": "",
+  "interpretation": "",
+  "uncertainties": [],
+  "identity": {
+    "status": "unresolved",
+    "rationale": "",
+    "evidence": []
+  }
+}

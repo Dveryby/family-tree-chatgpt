@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rodokmen pro ChatGPT"
+  short_description: "Čtení matrik, prameny a deník bádání s kontrolou"
+  default_prompt: "Použij $family-tree-chatgpt k přepisu matričního zápisu a uložení pramene i nejistot."
