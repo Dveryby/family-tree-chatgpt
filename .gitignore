@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Node and generated site
+node_modules/
+dist/
+.astro/
+coverage/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Private family trees and local research (keep outside this repository)
+*.[gG][eE][dD]
+*.[gG][eE][dD][cC][oO][mM]
+*.gedzip
+*.ftb
+*.gramps
+*.gpkg
+/private/
+/research/
+/data/
+/documents/
+/sources/
+/crops/
+/working/
+/dokumenty/
+/zdroje/
+/vyrezy/
+/pracovni/
+
+# Local caches and editor/OS files
+.cache/
+.DS_Store
+Thumbs.db
+.idea/
