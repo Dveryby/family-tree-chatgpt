@@ -17,8 +17,13 @@ import zipfile
 
 
 BUNDLE_SCHEMA_VERSION = 1
+CURRENT_RESEARCH_SCHEMA_VERSION = 2
+SUPPORTED_RESEARCH_SCHEMA_VERSIONS = (1, 2)
 BUNDLE_MANIFEST = "manifest.json"
 BUNDLE_DIRECTORIES = ("sources", "crops", "history")
+MODEL_COLLECTIONS = ("persons", "relationships", "claims", "sources", "conflicts")
+MODEL_ID_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,95}")
+PREDICATE_RE = re.compile(r"[a-z][a-z0-9_.-]{0,95}")
 MAX_BUNDLE_FILES = 10_000
 MAX_BUNDLE_BYTES = 10 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
@@ -127,14 +132,264 @@ def validate_record(record, root, verify_hashes=False):
     return errors
 
 
+def validate_model_id(value, path, errors):
+    if not isinstance(value, str) or not MODEL_ID_RE.fullmatch(value):
+        errors.append(f"{path}: použij 1–96 malých ASCII písmen, číslic, pomlček či podtržítek.")
+
+
+def validate_keys(value, allowed, path, errors):
+    if not isinstance(value, dict):
+        errors.append(f"{path}: očekáván objekt.")
+        return False
+    unknown = sorted(set(value) - set(allowed))
+    if unknown:
+        errors.append(f"{path}: neznámá pole: {', '.join(unknown)}.")
+    return True
+
+
+def validate_text(value, path, errors, required=False):
+    if not isinstance(value, str):
+        errors.append(f"{path}: očekáván text.")
+    elif required and not value.strip():
+        errors.append(f"{path}: text nesmí být prázdný.")
+
+
+def validate_extensions(value, path, errors):
+    if not isinstance(value, dict):
+        errors.append(f"{path}: očekáván objekt pro rozšíření.")
+
+
+def validate_model(state, root, verify_hashes=False):
+    """Validate the schema-2 evidence graph without judging genealogy."""
+    errors = []
+    persons = state.get("persons", {})
+    relationships = state.get("relationships", {})
+    claims = state.get("claims", {})
+    sources = state.get("sources", {})
+    conflicts = state.get("conflicts", {})
+    collections = {
+        "persons": persons,
+        "relationships": relationships,
+        "claims": claims,
+        "sources": sources,
+        "conflicts": conflicts,
+    }
+    for name, collection in collections.items():
+        if not isinstance(collection, dict):
+            errors.append(f"{name}: očekávána mapa objektů podle ID.")
+    if errors:
+        return errors
+
+    person_fields = ("id", "label", "notes", "extensions")
+    for key, person in persons.items():
+        path = f"persons.{key}"
+        if not validate_keys(person, person_fields, path, errors):
+            continue
+        validate_model_id(key, path, errors)
+        if key != person.get("id"):
+            errors.append(f"{path}: klíč se neshoduje s id osoby.")
+        validate_text(person.get("label"), f"{path}.label", errors, required=True)
+        validate_text(person.get("notes"), f"{path}.notes", errors)
+        validate_extensions(person.get("extensions"), f"{path}.extensions", errors)
+
+    relationship_fields = ("id", "type", "participants", "notes", "extensions")
+    for key, relationship in relationships.items():
+        path = f"relationships.{key}"
+        if not validate_keys(relationship, relationship_fields, path, errors):
+            continue
+        validate_model_id(key, path, errors)
+        if key != relationship.get("id"):
+            errors.append(f"{path}: klíč se neshoduje s id vztahu.")
+        validate_text(relationship.get("type"), f"{path}.type", errors, required=True)
+        validate_text(relationship.get("notes"), f"{path}.notes", errors)
+        validate_extensions(relationship.get("extensions"), f"{path}.extensions", errors)
+        participants = relationship.get("participants")
+        if not isinstance(participants, list) or len(participants) < 2:
+            errors.append(f"{path}.participants: očekáváni alespoň dva účastníci.")
+            continue
+        seen = set()
+        for index, participant in enumerate(participants):
+            item_path = f"{path}.participants[{index}]"
+            if not validate_keys(participant, ("person_id", "role"), item_path, errors):
+                continue
+            person_id = participant.get("person_id")
+            role = participant.get("role")
+            validate_text(person_id, f"{item_path}.person_id", errors, required=True)
+            validate_text(role, f"{item_path}.role", errors, required=True)
+            if isinstance(person_id, str) and person_id not in persons:
+                errors.append(f"{item_path}.person_id: neznámá osoba {person_id!r}.")
+            if isinstance(person_id, str) and isinstance(role, str):
+                marker = (person_id, role)
+                if marker in seen:
+                    errors.append(f"{item_path}: duplicitní účastník a role.")
+                seen.add(marker)
+
+    source_fields = (
+        "id", "kind", "title", "citation", "repository", "url", "accessed_on",
+        "files", "record_ids", "notes", "extensions",
+    )
+    for key, source in sources.items():
+        path = f"sources.{key}"
+        if not validate_keys(source, source_fields, path, errors):
+            continue
+        validate_model_id(key, path, errors)
+        if key != source.get("id"):
+            errors.append(f"{path}: klíč se neshoduje s id pramene.")
+        validate_text(source.get("kind"), f"{path}.kind", errors, required=True)
+        validate_text(source.get("title"), f"{path}.title", errors, required=True)
+        for field in ("citation", "repository", "url", "accessed_on", "notes"):
+            validate_text(source.get(field), f"{path}.{field}", errors)
+        validate_extensions(source.get("extensions"), f"{path}.extensions", errors)
+        url = source.get("url")
+        if isinstance(url, str) and url and not url.startswith(("https://", "http://")):
+            errors.append(f"{path}.url: očekáván úplný HTTP(S) odkaz.")
+        accessed_on = source.get("accessed_on")
+        if isinstance(accessed_on, str) and accessed_on:
+            try:
+                date.fromisoformat(accessed_on)
+            except ValueError:
+                errors.append(f"{path}.accessed_on: očekáváno ISO datum YYYY-MM-DD.")
+        record_ids = source.get("record_ids")
+        if not isinstance(record_ids, list) or not all(isinstance(item, str) for item in record_ids):
+            errors.append(f"{path}.record_ids: očekáván seznam ID zápisů.")
+        else:
+            if len(record_ids) != len(set(record_ids)):
+                errors.append(f"{path}.record_ids: ID zápisů se nesmí opakovat.")
+            for record_id in record_ids:
+                if record_id not in state.get("records", {}):
+                    errors.append(f"{path}.record_ids: neznámý zápis {record_id!r}.")
+        files = source.get("files")
+        if not isinstance(files, list):
+            errors.append(f"{path}.files: očekáván seznam souborů.")
+        else:
+            seen_files = set()
+            for index, item in enumerate(files):
+                item_path = f"{path}.files[{index}]"
+                if not validate_keys(item, ("path", "sha256"), item_path, errors):
+                    continue
+                relative = item.get("path")
+                digest = item.get("sha256")
+                validate_text(relative, f"{item_path}.path", errors, required=True)
+                if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                    errors.append(f"{item_path}.sha256: očekáván SHA-256 malými hex znaky.")
+                if isinstance(relative, str) and relative:
+                    if relative in seen_files:
+                        errors.append(f"{item_path}.path: soubor je uveden vícekrát.")
+                    seen_files.add(relative)
+                    try:
+                        file_path = asset(root, relative)
+                        if verify_hashes and isinstance(digest, str) and digest != sha256(file_path):
+                            errors.append(f"{item_path}: změněný soubor nebo chybný SHA-256.")
+                    except ValueError as exc:
+                        errors.append(str(exc))
+
+    claim_fields = (
+        "id", "subject", "predicate", "value", "status", "citations",
+        "rationale", "notes", "extensions",
+    )
+    for key, claim in claims.items():
+        path = f"claims.{key}"
+        if not validate_keys(claim, claim_fields, path, errors):
+            continue
+        validate_model_id(key, path, errors)
+        if key != claim.get("id"):
+            errors.append(f"{path}: klíč se neshoduje s id tvrzení.")
+        subject = claim.get("subject")
+        if validate_keys(subject, ("type", "id"), f"{path}.subject", errors):
+            subject_type = subject.get("type")
+            subject_id = subject.get("id")
+            if subject_type not in ("person", "relationship"):
+                errors.append(f"{path}.subject.type: očekáváno person nebo relationship.")
+            validate_text(subject_id, f"{path}.subject.id", errors, required=True)
+            target = persons if subject_type == "person" else relationships
+            if isinstance(subject_id, str) and subject_type in ("person", "relationship") and subject_id not in target:
+                errors.append(f"{path}.subject.id: neznámý subjekt {subject_id!r}.")
+        predicate = claim.get("predicate")
+        if not isinstance(predicate, str) or not PREDICATE_RE.fullmatch(predicate):
+            errors.append(f"{path}.predicate: použij malé ASCII jméno, případně tečky, pomlčky či podtržítka.")
+        try:
+            json.dumps(claim.get("value"), ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError):
+            errors.append(f"{path}.value: hodnota musí být platná JSON hodnota bez NaN či nekonečna.")
+        status = claim.get("status")
+        if status not in ("unverified", "supported", "rejected"):
+            errors.append(f"{path}.status: očekáváno unverified, supported nebo rejected.")
+        validate_text(claim.get("rationale"), f"{path}.rationale", errors)
+        validate_text(claim.get("notes"), f"{path}.notes", errors)
+        validate_extensions(claim.get("extensions"), f"{path}.extensions", errors)
+        citations = claim.get("citations")
+        if not isinstance(citations, list):
+            errors.append(f"{path}.citations: očekáván seznam citací.")
+            citations = []
+        for index, citation in enumerate(citations):
+            item_path = f"{path}.citations[{index}]"
+            if not validate_keys(citation, ("source_id", "locator", "quotation", "note"), item_path, errors):
+                continue
+            source_id = citation.get("source_id")
+            validate_text(source_id, f"{item_path}.source_id", errors, required=True)
+            for field in ("locator", "quotation", "note"):
+                validate_text(citation.get(field), f"{item_path}.{field}", errors)
+            if isinstance(source_id, str) and source_id not in sources:
+                errors.append(f"{item_path}.source_id: neznámý pramen {source_id!r}.")
+        if status in ("supported", "rejected"):
+            if not isinstance(claim.get("rationale"), str) or not claim["rationale"].strip() or not citations:
+                errors.append(f"{path}: závěr supported/rejected vyžaduje zdůvodnění a citaci.")
+
+    conflict_fields = ("id", "claim_ids", "status", "resolution", "notes", "extensions")
+    for key, conflict in conflicts.items():
+        path = f"conflicts.{key}"
+        if not validate_keys(conflict, conflict_fields, path, errors):
+            continue
+        validate_model_id(key, path, errors)
+        if key != conflict.get("id"):
+            errors.append(f"{path}: klíč se neshoduje s id konfliktu.")
+        claim_ids = conflict.get("claim_ids")
+        if not isinstance(claim_ids, list) or len(claim_ids) < 2 or not all(isinstance(item, str) for item in claim_ids):
+            errors.append(f"{path}.claim_ids: očekávána alespoň dvě ID tvrzení.")
+            claim_ids = []
+        elif len(claim_ids) != len(set(claim_ids)):
+            errors.append(f"{path}.claim_ids: tvrzení se nesmí opakovat.")
+        for claim_id in claim_ids:
+            if claim_id not in claims:
+                errors.append(f"{path}.claim_ids: neznámé tvrzení {claim_id!r}.")
+        status = conflict.get("status")
+        if status not in ("open", "resolved"):
+            errors.append(f"{path}.status: očekáváno open nebo resolved.")
+        resolution = conflict.get("resolution")
+        if validate_keys(resolution, ("preferred_claim_ids", "rationale"), f"{path}.resolution", errors):
+            preferred = resolution.get("preferred_claim_ids")
+            if not isinstance(preferred, list) or not all(isinstance(item, str) for item in preferred):
+                errors.append(f"{path}.resolution.preferred_claim_ids: očekáván seznam ID tvrzení.")
+                preferred = []
+            elif len(preferred) != len(set(preferred)):
+                errors.append(f"{path}.resolution.preferred_claim_ids: tvrzení se nesmí opakovat.")
+            for claim_id in preferred:
+                if claim_id not in claim_ids:
+                    errors.append(f"{path}.resolution.preferred_claim_ids: {claim_id!r} není v konfliktu.")
+            validate_text(resolution.get("rationale"), f"{path}.resolution.rationale", errors)
+            if status == "resolved" and (
+                not isinstance(resolution.get("rationale"), str) or not resolution["rationale"].strip()
+            ):
+                errors.append(f"{path}: vyřešený konflikt vyžaduje zdůvodnění.")
+        validate_text(conflict.get("notes"), f"{path}.notes", errors)
+        validate_extensions(conflict.get("extensions"), f"{path}.extensions", errors)
+    return errors
+
+
 def read_state(root):
     state = json.loads((root / "research.json").read_text(encoding="utf-8"))
-    if not isinstance(state, dict) or state.get("schema_version") != 1:
+    if (
+        not isinstance(state, dict)
+        or type(state.get("schema_version")) is not int
+        or state["schema_version"] not in SUPPORTED_RESEARCH_SCHEMA_VERSIONS
+    ):
         raise ValueError("Nepodporovaný formát badatelského stavu.")
     if type(state.get("revision")) is not int or state["revision"] < 0:
         raise ValueError("Neplatná revize stavu.")
     if not isinstance(state.get("records"), dict) or not isinstance(state.get("events"), list) or not isinstance(state.get("next_step"), str):
         raise ValueError("Poškozená struktura stavu.")
+    if state["schema_version"] == 2 and any(not isinstance(state.get(name), dict) for name in MODEL_COLLECTIONS):
+        raise ValueError("Poškozená struktura obecného genealogického modelu.")
     return state
 
 
@@ -144,6 +399,8 @@ def check_state(state, root):
         errors.extend(f"{key}: {e}" for e in validate_record(record, root, verify_hashes=True))
         if not isinstance(record, dict) or key != record.get("id"):
             errors.append(f"{key}: klíč se neshoduje s id zápisu.")
+    if state["schema_version"] == 2:
+        errors.extend(validate_model(state, root, verify_hashes=True))
     return errors
 
 
@@ -223,12 +480,58 @@ def audit_state(state):
             "code": "no_records",
             "message": "Badatelský stav zatím neobsahuje žádný archivní zápis.",
         })
+    model_counts = {name: len(state.get(name, {})) for name in MODEL_COLLECTIONS}
+    claim_status = {name: 0 for name in ("unverified", "supported", "rejected")}
+    if state["schema_version"] == 2:
+        claims_by_subject = {}
+        for claim_id, claim in state["claims"].items():
+            claim_status[claim["status"]] += 1
+            subject = (claim["subject"]["type"], claim["subject"]["id"])
+            claims_by_subject.setdefault(subject, []).append(claim_id)
+            if not claim["citations"]:
+                warnings.append({
+                    "code": "claim_without_citation",
+                    "claim_id": claim_id,
+                    "message": "Tvrzení nemá žádnou citaci pramene; ponech je jako neověřené.",
+                })
+        for person_id in state["persons"]:
+            if ("person", person_id) not in claims_by_subject:
+                warnings.append({
+                    "code": "person_without_claims",
+                    "person_id": person_id,
+                    "message": "Pracovní osoba nemá žádné samostatně evidované tvrzení.",
+                })
+        for relationship_id in state["relationships"]:
+            if ("relationship", relationship_id) not in claims_by_subject:
+                warnings.append({
+                    "code": "relationship_without_claims",
+                    "relationship_id": relationship_id,
+                    "message": "Vztah nemá žádné tvrzení, které by šlo doložit nebo odmítnout.",
+                })
+        for source_id, source in state["sources"].items():
+            if not source["citation"].strip():
+                warnings.append({
+                    "code": "source_without_citation",
+                    "source_id": source_id,
+                    "message": "Pramen nemá úplnou textovou citaci.",
+                })
+        for conflict_id, conflict in state["conflicts"].items():
+            if conflict["status"] == "open":
+                warnings.append({
+                    "code": "open_conflict",
+                    "conflict_id": conflict_id,
+                    "claim_ids": conflict["claim_ids"],
+                    "message": "Rozporná tvrzení zůstávají otevřená; nevybírej vítěze bez zdůvodnění.",
+                })
     return {
+        "schema_version": state["schema_version"],
         "revision": state["revision"],
         "records": len(state["records"]),
         "reading_status": reading_status,
         "identity_status": identity_status,
         "event_results": event_results,
+        "model_counts": model_counts,
+        "claim_status": claim_status,
         "warnings": warnings,
     }
 
@@ -368,9 +671,14 @@ def safe_bundle_path(name):
 
 
 def validate_manifest(manifest):
-    if not isinstance(manifest, dict) or manifest.get("bundle_schema_version") != BUNDLE_SCHEMA_VERSION:
+    if (
+        not isinstance(manifest, dict)
+        or type(manifest.get("bundle_schema_version")) is not int
+        or manifest["bundle_schema_version"] != BUNDLE_SCHEMA_VERSION
+    ):
         raise ValueError("Nepodporovaný formát přenosového balíčku.")
-    if manifest.get("research_schema_version") != 1:
+    research_schema_version = manifest.get("research_schema_version")
+    if type(research_schema_version) is not int or research_schema_version not in SUPPORTED_RESEARCH_SCHEMA_VERSIONS:
         raise ValueError("Balíček obsahuje nepodporovaný formát badatelského stavu.")
     revision = manifest.get("revision")
     if type(revision) is not int or revision < 0 or not isinstance(manifest.get("created_at"), str):
@@ -467,6 +775,8 @@ def restore_bundle(root, bundle_path):
         state = read_state(staging)
         if state["revision"] != manifest["revision"]:
             raise ValueError("Revize research.json neodpovídá manifestu.")
+        if state["schema_version"] != manifest["research_schema_version"]:
+            raise ValueError("Verze research.json neodpovídá manifestu.")
         errors = check_state(state, staging)
         if errors:
             raise ValueError("\n".join(errors))
@@ -509,7 +819,137 @@ def initialize(root):
             raise ValueError("Badatelský stav už existuje; použij resume.")
         for name in ("sources", "crops", "history"):
             (root / name).mkdir(exist_ok=True, mode=0o700)
-        atomic_json(root / "research.json", {"schema_version": 1, "revision": 0, "records": {}, "events": [], "next_step": "Vybrat první zápis a doložit jeho pramen."})
+        state = {
+            "schema_version": CURRENT_RESEARCH_SCHEMA_VERSION,
+            "revision": 0,
+            "records": {},
+            "persons": {},
+            "relationships": {},
+            "claims": {},
+            "sources": {},
+            "conflicts": {},
+            "events": [],
+            "next_step": "Vybrat první výzkumnou otázku a doložit výchozí tvrzení.",
+        }
+        atomic_json(root / "research.json", state)
+
+
+def backup_and_write(root, previous, new):
+    backup = root / "history" / f"revision-{previous['revision']:06d}.json"
+    if backup.exists():
+        if json.loads(backup.read_text(encoding="utf-8")) != previous:
+            raise ValueError("Záloha revize už existuje s jiným obsahem.")
+    else:
+        with backup.open("x", encoding="utf-8") as stream:
+            json.dump(previous, stream, ensure_ascii=False, indent=2, allow_nan=False)
+            stream.write("\n")
+        backup.chmod(0o600)
+    atomic_json(root / "research.json", new)
+
+
+def migrate(root, expected_revision, next_step):
+    if not next_step.strip():
+        raise ValueError("Další krok nesmí být prázdný.")
+    with locked(root):
+        state = read_state(root)
+        if state["revision"] != expected_revision:
+            raise ValueError("Stav se mezitím změnil; znovu načti resume a spoj změny.")
+        if state["schema_version"] == CURRENT_RESEARCH_SCHEMA_VERSION:
+            raise ValueError("Badatelský stav už používá aktuální formát 2.")
+        errors = check_state(state, root)
+        if errors:
+            raise ValueError("\n".join(errors))
+        new = deepcopy(state)
+        new["schema_version"] = CURRENT_RESEARCH_SCHEMA_VERSION
+        for name in MODEL_COLLECTIONS:
+            new[name] = {}
+        new["revision"] += 1
+        new["events"].append({
+            "result": "schema_migrated",
+            "from_schema_version": state["schema_version"],
+            "to_schema_version": CURRENT_RESEARCH_SCHEMA_VERSION,
+            "at": now(),
+            "revision": new["revision"],
+        })
+        new["next_step"] = next_step
+        errors = check_state(new, root)
+        if errors:
+            raise ValueError("\n".join(errors))
+        backup_and_write(root, state, new)
+        return new
+
+
+def normalize_model_patch(patch):
+    if not isinstance(patch, dict) or not patch:
+        raise ValueError("Modelová změna musí být neprázdný JSON objekt.")
+    unknown = sorted(set(patch) - set(MODEL_COLLECTIONS))
+    if unknown:
+        raise ValueError(f"Modelová změna obsahuje neznámé kolekce: {', '.join(unknown)}.")
+    normalized = {}
+    for name, items in patch.items():
+        if not isinstance(items, list):
+            raise ValueError(f"{name}: očekáván seznam objektů k vložení nebo nahrazení.")
+        by_id = {}
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                raise ValueError(f"{name}[{index}]: očekáván objekt.")
+            item_id = item.get("id")
+            if not isinstance(item_id, str) or not MODEL_ID_RE.fullmatch(item_id):
+                raise ValueError(f"{name}[{index}].id: neplatné stabilní ID.")
+            if item_id in by_id:
+                raise ValueError(f"{name}: duplicitní ID {item_id!r} v jedné změně.")
+            by_id[item_id] = item
+        normalized[name] = by_id
+    if not any(normalized.values()):
+        raise ValueError("Modelová změna neobsahuje žádný objekt.")
+    return normalized
+
+
+def apply_model(root, expected_revision, patch, next_step):
+    if not next_step.strip():
+        raise ValueError("Další krok nesmí být prázdný.")
+    changes = normalize_model_patch(patch)
+    with locked(root):
+        state = read_state(root)
+        if state["schema_version"] != CURRENT_RESEARCH_SCHEMA_VERSION:
+            raise ValueError("Obecný model vyžaduje formát 2; nejprve spusť výslovnou migraci.")
+        if state["revision"] != expected_revision:
+            raise ValueError("Stav se mezitím změnil; znovu načti resume a spoj změny.")
+        errors = check_state(state, root)
+        if errors:
+            raise ValueError("\n".join(errors))
+        new = deepcopy(state)
+        counts = {}
+        for name, items in changes.items():
+            new[name].update(deepcopy(items))
+            counts[name] = len(items)
+        errors = check_state(new, root)
+        if errors:
+            raise ValueError("\n".join(errors))
+        new["revision"] += 1
+        new["events"].append({
+            "result": "model_applied",
+            "counts": counts,
+            "at": now(),
+            "revision": new["revision"],
+        })
+        new["next_step"] = next_step
+        backup_and_write(root, state, new)
+        return new
+
+
+def model_view(state, collection=None, item_id=None):
+    if state["schema_version"] != CURRENT_RESEARCH_SCHEMA_VERSION:
+        raise ValueError("Obecný model není ve formátu 1 dostupný; nejprve spusť migraci.")
+    if collection is None:
+        return {name: state[name] for name in MODEL_COLLECTIONS}
+    if collection not in MODEL_COLLECTIONS:
+        raise ValueError("Neznámá kolekce obecného modelu.")
+    if item_id is None:
+        return state[collection]
+    if item_id not in state[collection]:
+        raise ValueError(f"V kolekci {collection} není ID {item_id!r}.")
+    return state[collection][item_id]
 
 
 def update(root, expected_revision, *, record=None, result=None, scope=None, next_step):
@@ -540,16 +980,7 @@ def update(root, expected_revision, *, record=None, result=None, scope=None, nex
         event.update({"at": now(), "revision": new["revision"]})
         new["events"].append(event)
         new["next_step"] = next_step
-        backup = root / "history" / f"revision-{state['revision']:06d}.json"
-        # Exclusive backup creation: never silently replace a previous snapshot.
-        if backup.exists():
-            if json.loads(backup.read_text(encoding="utf-8")) != state:
-                raise ValueError("Záloha revize už existuje s jiným obsahem.")
-        else:
-            with backup.open("x", encoding="utf-8") as stream:
-                json.dump(state, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                stream.write("\n")
-        atomic_json(root / "research.json", new)
+        backup_and_write(root, state, new)
         return new
 
 

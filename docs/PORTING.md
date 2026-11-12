@@ -15,6 +15,8 @@ protokolů ani potvrzení aktuálního přístupu ke všem portálům.
 - `skills/family-tree-chatgpt/SKILL.md`: přepracovaný postup pro jeden zápis, výběr skutečně dostupných nástrojů a přiznaná omezení.
 - `crop.py`: normalizované souřadnice dle původního `vyrez.py`, Python 3.11+ a Pillow 13.0.0 místo ImageMagicku, PNG bez EXIF, kontrolní součty a ochrana před přepsáním.
 - `research.py`: nový lokální zápisník ve standardní knihovně Pythonu 3.11+, oddělené čtení/totožnost, historie, revize, součty a deník.
+- `family_tree.py`: nové jednotné CLI nad místními projektovými, modelovými,
+  GEDCOM a obrazovými funkcemi; nejde o převzatý upstreamový skript.
 - `gedcom.py`: nový bezpečný offline import podle veřejné specifikace GEDCOM;
   původní parser ani datové schéma se nekopírují, ale bezpečně je adaptovaná
   užitečná fronta předků a Kekulého číslování.

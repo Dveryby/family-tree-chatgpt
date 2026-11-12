@@ -22,7 +22,8 @@ použitím ověřit, že se adresa, rozhraní a podmínky nezměnily.
    nikoli jako archivní originál nebo plné rozlišení.
 6. Citovat číslo knihy, původce, obsah a rozsah let, číslo snímku a přesnou
    skutečně otevřenou adresu s identifikátorem obrázku. Adresu neodhadovat.
-7. Výřez vytvářet ze zachovaného screenshotu pomocí `scripts/crop.py` a
+7. Výřez vytvářet ze zachovaného screenshotu pomocí
+   `scripts/family_tree.py image crop` a
    vizuálně zkontrolovat screenshot i výřez. Kontrolní součty se vztahují k
    pracovnímu screenshotu, ne k původnímu souboru MZA.
 8. Bez odemčeného prohlížeče nebo uživatelem dodaného snímku uložit blokaci a

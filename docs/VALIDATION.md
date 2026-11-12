@@ -1,7 +1,7 @@
-# Ověření verze 0.2.0
+# Ověření verze 0.3.0
 
 Datum: 10.–12. listopadu 2026. První průchod: Linux, Python 3.12.14,
-Pillow 13.0.0. Rozšířená sada 38 testů byla znovu spuštěna na Pythonu 3.13.5
+Pillow 13.0.0. Rozšířená sada 44 testů byla znovu spuštěna na Pythonu 3.13.5
 s Pillow 11.1.0.
 
 ## Automatické testy
@@ -12,7 +12,7 @@ Příkaz z kořene repozitáře:
 python3 -m unittest discover -s tests -v
 ```
 
-Výsledek: **38 testů prošlo**.
+Výsledek: **44 testů prošlo**.
 
 - Přesné pixely a velikost výřezu; zachování originálu; EXIF orientace.
 - Odmítnutí chybných či prázdných souřadnic a přepsání výstupu/originálu.
@@ -48,6 +48,15 @@ Výsledek: **38 testů prošlo**.
 - Čtecí `audit` výzkumného stavu: počty stavů, chybějící překlad či
   interpretace, otevřené nejistoty, závěr o totožnosti před kontrolou čtení a
   možné duplicitní citace; audit stav nemění.
+- Formát 2 s osobami, vztahy, tvrzeními, prameny a konflikty: atomické vložení,
+  odkazy mezi kolekcemi, stavy tvrzení, citace, zdůvodněné řešení konfliktu a
+  kontrola SHA-256 souboru pramene.
+- Odmítnutí chybějících osob/pramenů/tvrzení, neznámých polí, neplatných ID,
+  prázdné změny a změny se starou očekávanou revizí bez částečného zápisu.
+- Výslovná migrace formátu 1 na formát 2 se zachováním záznamů, událostí,
+  předchozí revize v `history/` a bez automatického vytváření genealogických faktů.
+- Jednotné CLI `family_tree.py`: společný průchod příkazy `project`, `record`,
+  `model`, `gedcom` a `image`, včetně čtecího výběru jedné modelové entity.
 
 Strukturální validace balíčku proběhla nástrojem `quick_validate.py` bez chyb.
 

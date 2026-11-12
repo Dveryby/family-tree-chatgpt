@@ -2,7 +2,7 @@
 
 ## Účel a hranice
 
-`scripts/gedcom.py` převádí textový GEDCOM do čitelného JSONu a vytvoří plán
+`scripts/family_tree.py gedcom import` převádí textový GEDCOM do čitelného JSONu a vytvoří plán
 událostí, kterým chybí pramen. Import neověřuje správnost stromu, neslučuje
 osoby a nemění `research.json`. Všechna importovaná data mají stav
 `unverified_claims`; jednotlivé osoby, rodiny a události `unverified`.
@@ -20,14 +20,14 @@ nepřisuzuje jim neznámý význam.
 Vstup i výstup ulož mimo Git do soukromého úložiště:
 
 ```sh
-python3 scripts/gedcom.py /soukroma/rodina.ged /soukroma/rodina-import.json
+python3 scripts/family_tree.py gedcom import /soukroma/rodina.ged /soukroma/rodina-import.json
 ```
 
 Je-li známé GEDCOM ID výchozí osoby, lze současně vytvořit soukromou frontu
 předků:
 
 ```sh
-python3 scripts/gedcom.py /soukroma/rodina.ged /soukroma/rodina-import.json --root '@I1@' --max-generations 12
+python3 scripts/family_tree.py gedcom import /soukroma/rodina.ged /soukroma/rodina-import.json --root '@I1@' --max-generations 12
 ```
 
 `ancestor_research.positions` používá Kekulého číslování (1 výchozí osoba,
@@ -62,6 +62,11 @@ JSON obsahuje:
 pramen vizuálně zkontrolovaný nebo že citace podporuje konkrétní tvrzení.
 Položky plánu proto převáděj do ověřených záznamů až po práci s originálním
 pramenem podle hlavního postupu.
+
+Import záměrně automaticky nemění obecný model v `research.json`. Stabilní ID,
+možné duplicity osob a význam rodinných vazeb musí být před vložením posouzeny.
+Při vědomém převodu číst [referenci modelu](model.md), založit samostatný pramen
+typu GEDCOM a importované údaje ponechat ve stavu `unverified`.
 
 ## Bezpečnost a omezení
 

@@ -1,11 +1,14 @@
-# Soukromý badatelský stav (formát 1)
+# Soukromý badatelský stav (formát 2)
 
 ## Prostředí a nástroje
 
 - Python 3.11+; `research.py` používá standardní knihovnu.
-- `crop.py` potřebuje Pillow. Závislost nejprve ověřit v existujícím prostředí.
+- Obrazové příkazy potřebují Pillow. Závislost nejprve ověřit v existujícím prostředí.
 - Příklady volají skripty ze složky balíčku. Skutečné cesty odvodit ze složky načteného skillu.
 - Skripty nemají síťový přístup ani trvalé cloudové ukládání.
+- Stabilní vstup je `scripts/family_tree.py`. Samostatné `research.py`,
+  `gedcom.py`, `crop.py` a `image_review.py` zůstávají kvůli kompatibilitě,
+  ale nové postupy mají používat jednotné CLI.
 
 ## Soubory
 
@@ -15,10 +18,15 @@ Zámek po pádu procesu nerušit bez ověření, že jiný zápis neběží.
 Podpora je pro jednoho lokálního zapisovatele; cloudovou synchronizaci a konflikty
 na více zařízeních musí řešit úložiště před příkazem `put` či `log`.
 
-`research.json` obsahuje `schema_version: 1`, celočíselnou `revision`, mapu `records`,
-seznam `events` a text `next_step`. Jeden zápis, událost a další krok se ukládají
-jednou atomickou náhradou souboru. `history/` uchovává předchozí revize;
+`research.json` obsahuje `schema_version: 2`, celočíselnou `revision`, mapu `records`,
+obecný model osob, vztahů, tvrzení, pramenů a konfliktů, seznam `events` a text
+`next_step`. Podrobné schéma je v [referenci modelu](model.md). Jedna změna a
+další krok se ukládají atomickou náhradou souboru. `history/` uchovává předchozí revize;
 nejde o vzdálenou zálohu ani nezměnitelný auditní systém.
+
+Formát 1 lze dál kontrolovat, exportovat a obnovit. Před prvním použitím
+obecného modelu jej převést výslovným `project migrate`; automatická migrace
+osob nebo příbuzenských vazeb se neprovádí.
 
 ## Přenosový balíček
 
@@ -30,7 +38,7 @@ Zahrne pouze `research.json`, pravidelné soubory v `sources/`, `crops/` a
 soubory v kořeni, symlinky a přístupové údaje se nepřenášejí.
 
 ```sh
-python scripts/research.py --workspace /soukroma export /uloziste/badani-r12.zip
+python3 scripts/family_tree.py --workspace /soukroma project export /uloziste/badani-r12.zip
 ```
 
 Výstupní ZIP musí ležet mimo badatelskou složku i git repozitář. Skript ZIP
@@ -45,9 +53,9 @@ obsah a existující cílovou složku. Rozbalování probíhá v dočasné slož
 chybě se neúplný cíl nezachová.
 
 ```sh
-python scripts/research.py --workspace /nova/soukroma restore /uloziste/badani-r12.zip
-python scripts/research.py --workspace /nova/soukroma check
-python scripts/research.py --workspace /nova/soukroma resume
+python3 scripts/family_tree.py --workspace /nova/soukroma project restore /uloziste/badani-r12.zip
+python3 scripts/family_tree.py --workspace /nova/soukroma project check
+python3 scripts/family_tree.py --workspace /nova/soukroma project resume
 ```
 
 Po obnově porovnat revizi, `next_step`, počet záznamů a SHA-256 balíčku. Teprve
@@ -87,7 +95,7 @@ odůvodnění a citace; program kontroluje přítomnost, nikoli věcnou správno
 ## Výřez
 
 ```sh
-python scripts/crop.py /soukroma/sources/scan.png /soukroma/crops/record.png --box 0.1,0.2,0.9,0.6
+python3 scripts/family_tree.py image crop /soukroma/sources/scan.png /soukroma/crops/record.png --box 0.1,0.2,0.9,0.6
 ```
 
 Výstup je PNG bez EXIF/GPS; originál zůstává beze změny. Souřadnice jsou po EXIF
@@ -101,9 +109,9 @@ Funkce adaptované z původních nástrojů `overit.py`, `ramecek.py` a místní
 režimu `mapa_knihy.py` jsou sloučené v jednom offline skriptu:
 
 ```sh
-python scripts/image_review.py split /soukroma/sources/scan.png /soukroma/crops/left.png /soukroma/crops/right.png --box 0.1,0.2,0.9,0.6
-python scripts/image_review.py mark /soukroma/crops/record.png /soukroma/crops/record-marked.png --box 0.05,0.1,0.95,0.8
-python scripts/image_review.py sheet /soukroma/crops/book-map.png /soukroma/sources/scan-10.png /soukroma/sources/scan-20.png --box 0,0,1,0.15
+python3 scripts/family_tree.py image split /soukroma/sources/scan.png /soukroma/crops/left.png /soukroma/crops/right.png --box 0.1,0.2,0.9,0.6
+python3 scripts/family_tree.py image mark /soukroma/crops/record.png /soukroma/crops/record-marked.png --box 0.05,0.1,0.95,0.8
+python3 scripts/family_tree.py image sheet /soukroma/crops/book-map.png /soukroma/sources/scan-10.png /soukroma/sources/scan-20.png --box 0,0,1,0.15
 ```
 
 `split` zachová překryv mezi částmi; `--contrast` vytvoří pracovní černobílou
@@ -115,11 +123,11 @@ původní soubory nemění.
 ## Kontrola a pokračování
 
 ```sh
-python scripts/research.py --workspace /soukroma resume
-python scripts/research.py --workspace /soukroma put /soukroma/zaznam.json --expected-revision 0 --next-step "Ověřit druhého stejnojmenného kandidáta."
-python scripts/research.py --workspace /soukroma check
-python scripts/research.py --workspace /soukroma audit
-python scripts/research.py --workspace /soukroma log --result not_found --scope "Konkrétní kniha, snímky 12–16, hledané jméno" --expected-revision 1 --next-step "Projít rejstřík sňatků."
+python3 scripts/family_tree.py --workspace /soukroma project resume
+python3 scripts/family_tree.py --workspace /soukroma record put /soukroma/zaznam.json --expected-revision 0 --next-step "Ověřit druhého stejnojmenného kandidáta."
+python3 scripts/family_tree.py --workspace /soukroma project check
+python3 scripts/family_tree.py --workspace /soukroma project audit
+python3 scripts/family_tree.py --workspace /soukroma project log --result not_found --scope "Konkrétní kniha, snímky 12–16, hledané jméno" --expected-revision 1 --next-step "Projít rejstřík sňatků."
 ```
 
 Revize jsou příklady, vždy načíst aktuální hodnotu.

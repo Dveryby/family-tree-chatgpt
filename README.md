@@ -2,11 +2,11 @@
 
 Český genealogický asistent pro ChatGPT. Projekt připravuje převod postupů a nástrojů z [sarsonj/rodokmen-skill](https://github.com/sarsonj/rodokmen-skill) do prostředí ChatGPT.
 
-Aktuální verze: **0.2.0** (12. listopadu 2026).
+Aktuální verze: **0.3.0** (12. listopadu 2026).
 
 ## Stav
 
-Minor verze 0.2.0, aktualizovaná 12. listopadu 2026. Obsahuje převedený
+Minor verze 0.3.0, vydaná 12. listopadu 2026. Obsahuje převedený
 pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
 pramenů s historií. Ověřen je lokální export a obnova úplného stavu přes ZIP
 s kontrolními součty. Živý přístup a práce s jedním snímkem byly ověřeny pro
@@ -16,6 +16,9 @@ ověřený včetně pokračování další revizí. První skutečný zápis MZA
 vizuální kontrolou, přepisem, překladem a oddělenou interpretací. Implementovaný
 je také bezpečný offline import GEDCOM tvrzení, plán chybějících dokladů,
 výzkumná fronta předků, kontrolní obrazové deriváty a neblokující audit kvality.
+Nový badatelský stav formátu 2 odděluje pracovní identity od dokazovaných
+tvrzení, citací a rozporů; starší formát 1 lze výslovně migrovat. Dílčí skripty
+jsou dostupné přes jedno stabilní příkazové rozhraní.
 Všech 31 nástrojů původního projektu bylo funkčně roztříděno; užitečné offline
 postupy byly adaptovány, zatímco síťové a webové nástroje zůstávají odložené
 do samostatného ověření.
@@ -29,6 +32,15 @@ výzkum v ChatGPT/Codexu: od přijetí neověřeného tvrzení přes práci s pr
 přepis a posouzení totožnosti až po bezpečné uložení a pokračování. Konkrétní
 osoby z pilotních zápisů jsou testovací případy nástroje, nikoli výzkumný cíl
 projektu.
+
+## Novinky ve verzi 0.3.0
+
+- obecný model osob, vztahů, tvrzení, pramenů a explicitních konfliktů,
+- badatelský stav formátu 2 s kontrolou odkazů, citací a souborů pramenů,
+- atomické modelové změny a bezpečné řešení rozporů bez mazání původních tvrzení,
+- výslovná migrace formátu 1 při zachování historie a kompatibility exportu,
+- jednotné CLI `family_tree.py` pro projekt, zápisy, model, GEDCOM a obrázky,
+- rozšířená sada 44 syntetických testů.
 
 ## Novinky ve verzi 0.2.0
 
@@ -65,8 +77,8 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
 - [x] Přidat import GEDCOM a plán dohledání dokladů.
 - [x] Porovnat všech 31 upstream nástrojů a adaptovat kontrolu obrazů, audit
   kvality, frontu předků a metodiku ověřování.
-- [ ] Navrhnout obecný model osob, vztahů, tvrzení, pramenů a konfliktů.
-- [ ] Sjednotit dílčí skripty pod jedno stabilní příkazové rozhraní.
+- [x] Navrhnout obecný model osob, vztahů, tvrzení, pramenů a konfliktů.
+- [x] Sjednotit dílčí skripty pod jedno stabilní příkazové rozhraní.
 - [ ] Později posoudit propojení s Gramps Web a rodinný web.
 
 ## Kvalita bádání
@@ -81,22 +93,30 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
 ## Lokální použití
 
 Vyžaduje Python 3.11+ a pro obrazové nástroje Pillow. Testováno na kombinacích
-Python 3.12.14 / Pillow 13.0.0 a Python 3.13.5 / Pillow 11.1.0. Příkazy pro
-zápisník používají pouze standardní knihovnu Pythonu.
+Python 3.12.14 / Pillow 13.0.0 a Python 3.13.5 / Pillow 11.1.0. Projektové,
+modelové a GEDCOM příkazy používají pouze standardní knihovnu Pythonu; Pillow
+se načítá až pro obrazové příkazy.
 
 ```sh
 python3 -m pip install -r requirements.txt
 python3 -m unittest discover -s tests -v
-python3 skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani init
-python3 skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani resume
-python3 skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani audit
-python3 skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani export /soukrome-uloziste/badani.zip
-python3 skills/family-tree-chatgpt/scripts/research.py --workspace /nova/cesta/obnovene-badani restore /soukrome-uloziste/badani.zip
-python3 skills/family-tree-chatgpt/scripts/gedcom.py /soukrome-uloziste/strom.ged /soukrome-uloziste/strom-import.json
-python3 skills/family-tree-chatgpt/scripts/image_review.py split /soukrome-uloziste/snimky/scan.png /soukrome-uloziste/snimky/left.png /soukrome-uloziste/snimky/right.png
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani project init
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani project resume
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani project audit
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani model apply /soukrome-uloziste/zmena-modelu.json --expected-revision 0 --next-step "Ověřit první tvrzení."
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani project export /soukrome-uloziste/badani.zip
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /nova/cesta/obnovene-badani project restore /soukrome-uloziste/badani.zip
+python3 skills/family-tree-chatgpt/scripts/family_tree.py gedcom import /soukrome-uloziste/strom.ged /soukrome-uloziste/strom-import.json
+python3 skills/family-tree-chatgpt/scripts/family_tree.py image split /soukrome-uloziste/snimky/scan.png /soukrome-uloziste/snimky/left.png /soukrome-uloziste/snimky/right.png
 ```
 
-Cesta je příklad; zvol vlastní soukromou složku mimo git repozitáře. Další příkazy a formát záznamu jsou v [datové referenci](skills/family-tree-chatgpt/references/data.md), GEDCOM v [samostatném návodu](skills/family-tree-chatgpt/references/gedcom.md). Skripty samy nečtou písmo, neověřují totožnost osoby a neprovádějí cloudové ukládání. Importovaný GEDCOM je veden jako soubor neověřených tvrzení, nikoli jako archivní důkaz.
+Cesta je příklad; zvol vlastní soukromou složku mimo git repozitáře. Další
+příkazy a formát zápisu jsou v [datové referenci](skills/family-tree-chatgpt/references/data.md),
+obecné entity a konflikty v [referenci modelu](skills/family-tree-chatgpt/references/model.md)
+a GEDCOM v [samostatném návodu](skills/family-tree-chatgpt/references/gedcom.md).
+Skripty samy nečtou písmo, neověřují totožnost osoby a neprovádějí cloudové
+ukládání. Importovaný GEDCOM je veden jako soubor neověřených tvrzení, nikoli
+jako archivní důkaz, a bez vědomého mapování nemění obecný model.
 
 ## Kód a rodinná data
 

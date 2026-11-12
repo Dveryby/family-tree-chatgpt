@@ -1,4 +1,4 @@
 interface:
   display_name: "Rodokmen pro ChatGPT"
-  short_description: "Matriky, GEDCOM tvrzení, prameny a kontrolovaný deník"
-  default_prompt: "Použij $family-tree-chatgpt k přepisu matričního zápisu nebo importu GEDCOM tvrzení a uložení pramenů i nejistot."
+  short_description: "Osoby, vztahy, tvrzení, prameny a matriky"
+  default_prompt: "Použij $family-tree-chatgpt k evidenci osob, vztahů a rozporných tvrzení s dohledatelnými genealogickými prameny."
