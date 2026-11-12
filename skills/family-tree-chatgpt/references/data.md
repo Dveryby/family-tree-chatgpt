@@ -20,6 +20,39 @@ seznam `events` a text `next_step`. Jeden zápis, událost a další krok se ukl
 jednou atomickou náhradou souboru. `history/` uchovává předchozí revize;
 nejde o vzdálenou zálohu ani nezměnitelný auditní systém.
 
+## Přenosový balíček
+
+`export` nejprve ověří stav a kontrolní součty, zamkne pracovní složku proti
+souběžnému zápisu a vytvoří ZIP atomicky bez přepsání existujícího výstupu.
+Zahrne pouze `research.json`, pravidelné soubory v `sources/`, `crops/` a
+`history/` a vnitřní `manifest.json`. Manifest obsahuje verzi formátu, revizi,
+čas vytvoření, velikost a SHA-256 každého souboru. `.research.lock`, pomocné
+soubory v kořeni, symlinky a přístupové údaje se nepřenášejí.
+
+```sh
+python scripts/research.py --workspace /soukroma export /uloziste/badani-r12.zip
+```
+
+Výstupní ZIP musí ležet mimo badatelskou složku i git repozitář. Skript ZIP
+nešifruje ani nenahrává; soukromí, přístupová práva, verzování a dostupnost
+zajišťuje zvolené úložiště. Vrácený `bundle_sha256` uložit spolu s identifikací
+verze balíčku.
+
+`restore` přijímá pouze podporovaný manifest, deklarované pravidelné soubory a
+bezpečné relativní cesty. Ověří velikosti, SHA-256, revizi a celý obnovený stav.
+Odmítne symlinky, duplicitní či nadbytečné položky, cestu mimo cíl, změněný
+obsah a existující cílovou složku. Rozbalování probíhá v dočasné složce; při
+chybě se neúplný cíl nezachová.
+
+```sh
+python scripts/research.py --workspace /nova/soukroma restore /uloziste/badani-r12.zip
+python scripts/research.py --workspace /nova/soukroma check
+python scripts/research.py --workspace /nova/soukroma resume
+```
+
+Po obnově porovnat revizi, `next_step`, počet záznamů a SHA-256 balíčku. Teprve
+pak pokračovat příkazy `put` nebo `log` s aktuální očekávanou revizí.
+
 ## Jeden záznam
 
 Kostru má `assets/record.json`. ID je stabilní ASCII identifikátor, např.
@@ -71,5 +104,4 @@ python scripts/research.py --workspace /soukroma check
 python scripts/research.py --workspace /soukroma log --result not_found --scope "Konkrétní kniha, snímky 12–16, hledané jméno" --expected-revision 1 --next-step "Projít rejstřík sňatků."
 ```
 
-Revize jsou příklady, vždy načíst aktuální hodnotu. Před navázáním na jiném zařízení
-obnovit celou složku z trvalého úložiště a znovu spustit `check` a `resume`.
+Revize jsou příklady, vždy načíst aktuální hodnotu.

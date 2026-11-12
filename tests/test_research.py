@@ -1,14 +1,17 @@
 """Offline tests with generated images and synthetic evidence only."""
 from copy import deepcopy
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 from PIL import Image
 
 REPO = Path(__file__).resolve().parents[1]
@@ -129,6 +132,133 @@ class ResearchTests(unittest.TestCase):
                 broken = deepcopy(self.record)
                 broken[field] = value
                 self.assertTrue(research.validate_record(broken, self.root))
+
+    def test_cli_export_restore_roundtrip_and_continuation(self):
+        research.update(self.root, 0, record=self.reviewed(), next_step="Ověřit přenos.")
+        research.update(self.root, 1, result="note", scope="Syntetický přenosový test", next_step="Obnovit stav.")
+        bundle = Path(self.temp.name) / "research-transfer.zip"
+        script = str(SKILL / "scripts/research.py")
+        export = subprocess.run(
+            [sys.executable, script, "--workspace", str(self.root), "export", str(bundle)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        export_result = json.loads(export.stdout)
+        self.assertTrue(export_result["exported"])
+        self.assertEqual(export_result["revision"], 2)
+        self.assertEqual(export_result["bundle_sha256"], research.sha256(bundle))
+        with self.assertRaises(FileExistsError):
+            research.export_bundle(self.root, bundle)
+        restored = Path(self.temp.name) / "restored"
+        restore = subprocess.run(
+            [sys.executable, script, "--workspace", str(restored), "restore", str(bundle)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        restore_result = json.loads(restore.stdout)
+        self.assertTrue(restore_result["restored"])
+        self.assertEqual(restore_result["revision"], 2)
+        self.assertEqual(research.read_state(restored), research.read_state(self.root))
+        self.assertEqual((restored / "sources/scan.png").read_bytes(), (self.root / "sources/scan.png").read_bytes())
+        self.assertEqual((restored / "crops/record.png").read_bytes(), (self.root / "crops/record.png").read_bytes())
+        self.assertEqual(
+            [path.read_bytes() for path in sorted((restored / "history").iterdir())],
+            [path.read_bytes() for path in sorted((self.root / "history").iterdir())],
+        )
+        self.assertFalse((restored / ".research.lock").exists())
+        continued = research.update(restored, 2, result="note", scope="Pokračování po obnově", next_step="Další revize.")
+        self.assertEqual(continued["revision"], 3)
+
+    def test_restore_rejects_changed_content_and_cleans_staging(self):
+        research.update(self.root, 0, record=self.reviewed(), next_step="Export.")
+        bundle = Path(self.temp.name) / "valid.zip"
+        research.export_bundle(self.root, bundle)
+        with zipfile.ZipFile(bundle, "r") as source:
+            contents = [(info, source.read(info)) for info in source.infolist()]
+        by_name = {info.filename: data for info, data in contents}
+        changed = bytearray(by_name["sources/scan.png"])
+        changed[-1] ^= 1
+        by_name["sources/scan.png"] = bytes(changed)
+        tampered = Path(self.temp.name) / "tampered.zip"
+        with zipfile.ZipFile(tampered, "w") as target:
+            for original, _ in contents:
+                copied = zipfile.ZipInfo(original.filename, date_time=original.date_time)
+                copied.compress_type = original.compress_type
+                copied.create_system = original.create_system
+                copied.external_attr = original.external_attr
+                target.writestr(copied, by_name[original.filename])
+        restored = Path(self.temp.name) / "restored"
+        with self.assertRaisesRegex(ValueError, "Kontrolní součet"):
+            research.restore_bundle(restored, tampered)
+        self.assertFalse(restored.exists())
+        self.assertFalse(list(Path(self.temp.name).glob(".research-restore-*")))
+
+    def test_restore_rejects_path_traversal_and_existing_destination(self):
+        malicious = Path(self.temp.name) / "malicious.zip"
+        payload = b"x"
+        manifest = {
+            "bundle_schema_version": 1,
+            "research_schema_version": 1,
+            "revision": 0,
+            "created_at": "2026-11-12T00:00:00+00:00",
+            "files": [{"path": "../escape", "size": 1, "sha256": hashlib.sha256(payload).hexdigest()}],
+        }
+        with zipfile.ZipFile(malicious, "w") as archive:
+            archive.writestr("../escape", payload)
+            archive.writestr("manifest.json", json.dumps(manifest))
+        restored = Path(self.temp.name) / "restored"
+        with self.assertRaisesRegex(ValueError, "nebezpečnou cestu"):
+            research.restore_bundle(restored, malicious)
+        self.assertFalse((Path(self.temp.name) / "escape").exists())
+
+        bundle = Path(self.temp.name) / "valid.zip"
+        research.export_bundle(self.root, bundle)
+        symlink_bundle = Path(self.temp.name) / "symlink-entry.zip"
+        with zipfile.ZipFile(bundle, "r") as source, zipfile.ZipFile(symlink_bundle, "w") as target:
+            for original in source.infolist():
+                copied = zipfile.ZipInfo(original.filename, date_time=original.date_time)
+                copied.compress_type = original.compress_type
+                copied.create_system = original.create_system
+                copied.external_attr = original.external_attr
+                if original.filename == "research.json":
+                    copied.create_system = 3
+                    copied.external_attr = (stat.S_IFLNK | 0o777) << 16
+                target.writestr(copied, source.read(original))
+        with self.assertRaisesRegex(ValueError, "nepodporovanou položku"):
+            research.restore_bundle(restored, symlink_bundle)
+        self.assertFalse(restored.exists())
+
+        research.initialize(restored)
+        before = (restored / "research.json").read_bytes()
+        with self.assertRaisesRegex(FileExistsError, "nepřepíše"):
+            research.restore_bundle(restored, bundle)
+        self.assertEqual((restored / "research.json").read_bytes(), before)
+
+    def test_export_rejects_symlinks_and_git_destination(self):
+        external = Path(self.temp.name) / "external.txt"
+        external.write_text("synthetic", encoding="utf-8")
+        (self.root / "sources/link.txt").symlink_to(external)
+        bundle = Path(self.temp.name) / "symlink.zip"
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            research.export_bundle(self.root, bundle)
+        self.assertFalse(bundle.exists())
+        self.assertFalse((self.root / ".research.lock").exists())
+        (self.root / "sources/link.txt").unlink()
+
+        failed = Path(self.temp.name) / "failed.zip"
+        with patch.object(research.os, "link", side_effect=OSError("simulated disk failure")):
+            with self.assertRaises(OSError):
+                research.export_bundle(self.root, failed)
+        self.assertFalse(failed.exists())
+        self.assertFalse(list(Path(self.temp.name).glob(".failed.zip.*.tmp")))
+        self.assertFalse((self.root / ".research.lock").exists())
+
+        repository = Path(self.temp.name) / "code"
+        subprocess.run(["git", "init", str(repository)], check=True, capture_output=True)
+        with self.assertRaisesRegex(ValueError, "mimo git"):
+            research.export_bundle(self.root, repository / "private.zip")
 
 
 class CropTests(unittest.TestCase):

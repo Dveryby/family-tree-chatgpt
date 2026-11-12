@@ -7,10 +7,21 @@ from datetime import date, datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
+import shutil
+import stat
 import sys
 import tempfile
+import zipfile
+
+
+BUNDLE_SCHEMA_VERSION = 1
+BUNDLE_MANIFEST = "manifest.json"
+BUNDLE_DIRECTORIES = ("sources", "crops", "history")
+MAX_BUNDLE_FILES = 10_000
+MAX_BUNDLE_BYTES = 10 * 1024 * 1024 * 1024
+MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 
 def now():
@@ -150,6 +161,247 @@ def atomic_json(path, state):
             os.unlink(name)
 
 
+def workspace_files(root):
+    files = []
+    state = root / "research.json"
+    if state.is_symlink() or not state.is_file():
+        raise ValueError("Chybí běžný soubor research.json.")
+    files.append(("research.json", state))
+    for name in BUNDLE_DIRECTORIES:
+        directory = root / name
+        if directory.is_symlink() or not directory.is_dir():
+            raise ValueError(f"Chybí běžný adresář {name}/.")
+        for path in sorted(directory.rglob("*")):
+            if path.is_symlink():
+                raise ValueError(f"Balíček nesmí obsahovat symlink: {path.relative_to(root)}")
+            if path.is_dir():
+                continue
+            if not path.is_file():
+                raise ValueError(f"Balíček podporuje pouze běžné soubory: {path.relative_to(root)}")
+            files.append((path.relative_to(root).as_posix(), path))
+    if len(files) > MAX_BUNDLE_FILES:
+        raise ValueError("Badatelská složka obsahuje příliš mnoho souborů pro jeden balíček.")
+    return files
+
+
+def bundle_output(path, root):
+    output = Path(path).expanduser().resolve()
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(f"Výstupní balíček už existuje: {output}")
+    if not output.parent.is_dir():
+        raise ValueError("Nadřazený adresář výstupního balíčku neexistuje.")
+    if output.is_relative_to(root):
+        raise ValueError("Výstupní balíček musí ležet mimo badatelskou složku.")
+    if in_git_tree(output):
+        raise ValueError("Soukromý badatelský balíček vytvoř mimo git repozitář.")
+    return output
+
+
+def zip_file_info(name):
+    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.create_system = 3
+    info.external_attr = (stat.S_IFREG | 0o600) << 16
+    return info
+
+
+def export_bundle(root, output_path):
+    root = private_workspace(root)
+    output = bundle_output(output_path, root)
+    temporary = None
+    with locked(root):
+        state = read_state(root)
+        errors = check_state(state, root)
+        if errors:
+            raise ValueError("\n".join(errors))
+        files = workspace_files(root)
+        fd, temporary = tempfile.mkstemp(prefix=f".{output.name}.", suffix=".tmp", dir=output.parent)
+        try:
+            entries = []
+            with os.fdopen(fd, "w+b") as stream:
+                with zipfile.ZipFile(stream, "w", allowZip64=True) as archive:
+                    for relative, path in files:
+                        digest = hashlib.sha256()
+                        size = 0
+                        with path.open("rb") as source, archive.open(zip_file_info(relative), "w") as target:
+                            while chunk := source.read(1024 * 1024):
+                                digest.update(chunk)
+                                size += len(chunk)
+                                if size > MAX_BUNDLE_BYTES:
+                                    raise ValueError(f"Soubor je pro balíček příliš velký: {relative}")
+                                target.write(chunk)
+                        entries.append({"path": relative, "size": size, "sha256": digest.hexdigest()})
+                    if sum(entry["size"] for entry in entries) > MAX_BUNDLE_BYTES:
+                        raise ValueError("Badatelský balíček překračuje povolenou velikost.")
+                    manifest = {
+                        "bundle_schema_version": BUNDLE_SCHEMA_VERSION,
+                        "research_schema_version": state["schema_version"],
+                        "revision": state["revision"],
+                        "created_at": now(),
+                        "files": entries,
+                    }
+                    manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+                    if len(manifest_bytes) > MAX_MANIFEST_BYTES:
+                        raise ValueError("Manifest balíčku je příliš velký.")
+                    archive.writestr(zip_file_info(BUNDLE_MANIFEST), manifest_bytes)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if output.exists() or output.is_symlink():
+                raise FileExistsError(f"Výstupní balíček už existuje: {output}")
+            # The temporary file lives in the same directory. A hard link publishes
+            # the fully flushed inode atomically and, unlike replace(), never
+            # overwrites a destination created by a concurrent process.
+            os.link(temporary, output)
+            os.unlink(temporary)
+            temporary = None
+            output.chmod(0o600)
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.unlink(temporary)
+    return {
+        "exported": True,
+        "bundle": str(output),
+        "bundle_sha256": sha256(output),
+        "revision": state["revision"],
+        "files": len(files),
+    }
+
+
+def safe_bundle_path(name):
+    if not isinstance(name, str) or not name or "\x00" in name or "\\" in name:
+        raise ValueError("Balíček obsahuje neplatnou cestu.")
+    parts = name.split("/")
+    if name.startswith("/") or any(part in ("", ".", "..") for part in parts):
+        raise ValueError(f"Balíček obsahuje nebezpečnou cestu: {name}")
+    if re.fullmatch(r"[A-Za-z]:", parts[0]):
+        raise ValueError(f"Balíček obsahuje nebezpečnou cestu: {name}")
+    path = PurePosixPath(name)
+    if path.is_absolute():
+        raise ValueError(f"Balíček obsahuje nebezpečnou cestu: {name}")
+    return path
+
+
+def validate_manifest(manifest):
+    if not isinstance(manifest, dict) or manifest.get("bundle_schema_version") != BUNDLE_SCHEMA_VERSION:
+        raise ValueError("Nepodporovaný formát přenosového balíčku.")
+    if manifest.get("research_schema_version") != 1:
+        raise ValueError("Balíček obsahuje nepodporovaný formát badatelského stavu.")
+    revision = manifest.get("revision")
+    if type(revision) is not int or revision < 0 or not isinstance(manifest.get("created_at"), str):
+        raise ValueError("Manifest balíčku má neplatná metadata.")
+    entries = manifest.get("files")
+    if not isinstance(entries, list) or not entries or len(entries) > MAX_BUNDLE_FILES:
+        raise ValueError("Manifest balíčku má neplatný seznam souborů.")
+    validated = {}
+    total = 0
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("Manifest balíčku obsahuje neplatnou položku.")
+        name = entry.get("path")
+        path = safe_bundle_path(name)
+        allowed = name == "research.json" or any(name.startswith(directory + "/") for directory in BUNDLE_DIRECTORIES)
+        if not allowed or name == BUNDLE_MANIFEST or name in validated:
+            raise ValueError(f"Manifest obsahuje nepovolenou nebo duplicitní cestu: {name}")
+        size = entry.get("size")
+        digest = entry.get("sha256")
+        if type(size) is not int or size < 0 or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"Manifest obsahuje neplatné údaje souboru: {name}")
+        total += size
+        if total > MAX_BUNDLE_BYTES:
+            raise ValueError("Badatelský balíček překračuje povolenou velikost.")
+        validated[name] = {"path": path, "size": size, "sha256": digest}
+    if "research.json" not in validated:
+        raise ValueError("Manifest neobsahuje research.json.")
+    return validated
+
+
+def read_bundle_manifest(archive):
+    infos = archive.infolist()
+    if len(infos) > MAX_BUNDLE_FILES + 1:
+        raise ValueError("Balíček obsahuje příliš mnoho položek.")
+    by_name = {}
+    for info in infos:
+        safe_bundle_path(info.filename)
+        if info.filename in by_name:
+            raise ValueError(f"Balíček obsahuje duplicitní cestu: {info.filename}")
+        mode = (info.external_attr >> 16) & 0o177777
+        if info.is_dir() or stat.S_ISLNK(mode) or (mode and not stat.S_ISREG(mode)):
+            raise ValueError(f"Balíček obsahuje nepodporovanou položku: {info.filename}")
+        by_name[info.filename] = info
+    info = by_name.get(BUNDLE_MANIFEST)
+    if info is None or info.file_size > MAX_MANIFEST_BYTES:
+        raise ValueError("Balíček neobsahuje platný manifest.")
+    try:
+        manifest = json.loads(archive.read(info).decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Manifest balíčku není platný JSON v UTF-8.") from exc
+    entries = validate_manifest(manifest)
+    if set(by_name) != set(entries) | {BUNDLE_MANIFEST}:
+        raise ValueError("Obsah balíčku neodpovídá manifestu.")
+    for name, entry in entries.items():
+        if by_name[name].file_size != entry["size"]:
+            raise ValueError(f"Velikost souboru neodpovídá manifestu: {name}")
+    return manifest, entries, by_name
+
+
+def restore_bundle(root, bundle_path):
+    root = private_workspace(root)
+    bundle = Path(bundle_path).expanduser().resolve()
+    if not bundle.is_file():
+        raise ValueError("Přenosový balíček neexistuje nebo není běžný soubor.")
+    if root.exists() or root.is_symlink():
+        raise FileExistsError("Cílová badatelská složka už existuje; obnova ji nepřepíše.")
+    if not root.parent.is_dir():
+        raise ValueError("Nadřazený adresář cílové badatelské složky neexistuje.")
+    staging = None
+    try:
+        with zipfile.ZipFile(bundle, "r") as archive:
+            manifest, entries, infos = read_bundle_manifest(archive)
+            staging = Path(tempfile.mkdtemp(prefix=".research-restore-", dir=root.parent))
+            staging.chmod(0o700)
+            for directory in BUNDLE_DIRECTORIES:
+                (staging / directory).mkdir(mode=0o700)
+            for name, entry in entries.items():
+                target = staging.joinpath(*entry["path"].parts)
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                digest = hashlib.sha256()
+                size = 0
+                with archive.open(infos[name], "r") as source, target.open("xb") as output:
+                    while chunk := source.read(1024 * 1024):
+                        size += len(chunk)
+                        if size > entry["size"] or size > MAX_BUNDLE_BYTES:
+                            raise ValueError(f"Rozbalený soubor překračuje očekávanou velikost: {name}")
+                        digest.update(chunk)
+                        output.write(chunk)
+                    output.flush()
+                    os.fsync(output.fileno())
+                target.chmod(0o600)
+                if size != entry["size"] or digest.hexdigest() != entry["sha256"]:
+                    raise ValueError(f"Kontrolní součet souboru neodpovídá manifestu: {name}")
+        state = read_state(staging)
+        if state["revision"] != manifest["revision"]:
+            raise ValueError("Revize research.json neodpovídá manifestu.")
+        errors = check_state(state, staging)
+        if errors:
+            raise ValueError("\n".join(errors))
+        if root.exists() or root.is_symlink():
+            raise FileExistsError("Cílová badatelská složka mezitím vznikla; obnova ji nepřepíše.")
+        os.rename(staging, root)
+        staging = None
+        return {
+            "restored": True,
+            "workspace": str(root),
+            "bundle_sha256": sha256(bundle),
+            "revision": state["revision"],
+            "records": len(state["records"]),
+        }
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Přenosový balíček není platný ZIP archiv.") from exc
+    finally:
+        if staging and staging.exists():
+            shutil.rmtree(staging)
+
+
 @contextmanager
 def locked(root):
     path = root / ".research.lock"
@@ -221,6 +473,10 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "resume", "check"):
         commands.add_parser(name)
+    export = commands.add_parser("export")
+    export.add_argument("bundle", type=Path)
+    restore = commands.add_parser("restore")
+    restore.add_argument("bundle", type=Path)
     put = commands.add_parser("put")
     put.add_argument("record_json", type=Path)
     log = commands.add_parser("log")
@@ -234,6 +490,12 @@ def main(argv=None):
         root = private_workspace(args.workspace)
         if args.command == "init":
             initialize(root)
+        elif args.command == "export":
+            print(json.dumps(export_bundle(root, args.bundle), ensure_ascii=False, indent=2))
+            return 0
+        elif args.command == "restore":
+            print(json.dumps(restore_bundle(root, args.bundle), ensure_ascii=False, indent=2))
+            return 0
         elif args.command == "put":
             record = json.loads(args.record_json.read_text(encoding="utf-8"))
             update(root, args.expected_revision, record=record, next_step=args.next_step)

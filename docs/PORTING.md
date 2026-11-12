@@ -59,7 +59,12 @@ Síťové nástroje, import stromu, původní `osoby.py`, Astro web, Claude mani
 
 ## Přenos mezi konverzacemi
 
-Lokálně funguje uložení a obnovení v oddělených procesech. Přenos skutečného soukromého bádání přes trvalé úložiště do nové konverzace ještě nebyl ověřen. Samotná lokální cesta není trvalé úložiště.
+Lokálně funguje uložení a obnovení v oddělených procesech i export úplného
+stavu do ZIP s manifestem, velikostmi a SHA-256. Obnova odmítá změněný obsah,
+nebezpečné cesty, symlinky a existující cíl a po rozbalení znovu kontroluje
+badatelský stav. Skript neobsahuje cloudového klienta ani vlastní šifrování.
+Přenos skutečného soukromého bádání přes trvalé úložiště do nové konverzace
+ještě nebyl ověřen. Samotná lokální cesta ani vytvořený ZIP nejsou trvalé úložiště.
 
 ## Licence
 

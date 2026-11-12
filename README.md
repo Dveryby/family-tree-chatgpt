@@ -6,10 +6,11 @@
 
 První lokální prototyp, aktualizovaný 12. listopadu 2026. Obsahuje převedený
 pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
-pramenů s historií. Živý přístup a práce s jedním snímkem byly ověřeny pro
+pramenů s historií. Ověřen je lokální export a obnova úplného stavu přes ZIP
+s kontrolními součty. Živý přístup a práce s jedním snímkem byly ověřeny pro
 Zemský archiv v Opavě a MZA Brno; ochranné výzvy řešil ručně uživatel. Nejde o
-publikovaný plugin. GEDCOM ani přenos soukromého bádání přes trvalé úložiště do
-nové konverzace ještě nejsou ověřené.
+publikovaný plugin. GEDCOM ani přenos přes trvalé úložiště do nové konverzace
+ještě nejsou ověřené.
 
 Zdroj postupu je ve [skills/family-tree-chatgpt](skills/family-tree-chatgpt). Přehled převodu a odložených nástrojů je v [docs/PORTING.md](docs/PORTING.md), výsledky ověření v [docs/VALIDATION.md](docs/VALIDATION.md).
 
@@ -33,7 +34,8 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
 - [x] Vybrat a lokálně otestovat minimum pro první zápis na syntetických datech.
 - [x] Ověřit přístup k Opavskému archivu a práci se snímkem.
 - [x] Ověřit přístup k MZA a bezpečný výřez z browserového screenshotu.
-- [ ] Navrhnout a vyzkoušet trvalé ukládání rozpracovaného bádání.
+- [x] Navrhnout a lokálně vyzkoušet přenosový balíček celého badatelského stavu.
+- [ ] Uložit balíček do trvalého soukromého úložiště a obnovit jej v nové konverzaci.
 - [ ] Dokončit první ověřený průchod a kontrolu navázání.
 - [ ] Přidat import GEDCOM a plán dohledání dokladů.
 - [ ] Později posoudit propojení s Gramps Web a rodinný web.
@@ -56,6 +58,8 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 python skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani init
 python skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani resume
+python skills/family-tree-chatgpt/scripts/research.py --workspace /cesta/mimo/repozitar/soukrome-badani export /soukrome-uloziste/badani.zip
+python skills/family-tree-chatgpt/scripts/research.py --workspace /nova/cesta/obnovene-badani restore /soukrome-uloziste/badani.zip
 ```
 
 Cesta je příklad; zvol vlastní soukromou složku mimo git repozitáře. Další příkazy a formát záznamu jsou v [datové referenci](skills/family-tree-chatgpt/references/data.md). Skripty samy nečtou písmo, neověřují totožnost osoby a neprovádějí cloudové ukládání. Kontrola dat není důkazem správného genealogického závěru.

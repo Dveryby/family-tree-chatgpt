@@ -1,6 +1,6 @@
 # Ověření první lokální verze
 
-Datum: 10. listopadu 2026. Prostředí: Linux, Python 3.12.14, Pillow 13.0.0.
+Datum: 10.–12. listopadu 2026. Prostředí: Linux, Python 3.12.14, Pillow 13.0.0.
 
 ## Automatické testy
 
@@ -10,7 +10,7 @@ Příkaz z kořene repozitáře:
 python -m unittest discover -s tests -v
 ```
 
-Výsledek: **16 testů prošlo**.
+Výsledek: **20 testů prošlo**.
 
 - Přesné pixely a velikost výřezu; zachování originálu; EXIF orientace.
 - Odmítnutí chybných či prázdných souřadnic a přepsání výstupu/originálu.
@@ -24,6 +24,11 @@ Výsledek: **16 testů prošlo**.
 - Vyžadování citace a vizuální kontroly pro stav `reviewed`.
 - Vyžadování zdůvodnění a citací pro závěr o totožnosti.
 - Srozumitelné chyby pro neplatné typy vybraných polí.
+- Export úplného stavu přes CLI, manifest s velikostmi a SHA-256 a obnova do
+  nové složky se shodnou revizí, historií, snímkem a výřezem.
+- Pokračování další revizí po obnově; odmítnutí změněného obsahu, nebezpečné
+  cesty, symlinku, cíle v git repozitáři a přepsání existujícího projektu.
+- Úklid neúplné obnovy a zámku po odmítnuté operaci.
 
 Strukturální validace balíčku proběhla nástrojem `quick_validate.py` bez chyb.
 
@@ -42,6 +47,31 @@ Proběhlo `init → resume → put → log note → check → resume`. Kontrola 
 Průchod odhalil příliš široké odmítání pracovních složek podle pouhé existence
 adresáře se jménem git metadat. Rozpoznání skutečného repozitáře bylo opraveno,
 ověřeno regresními testy a průchod byl dokončen přímo do určené složky.
+
+## Lokální export a obnova 12. listopadu 2026
+
+Syntetický stav s jedním vizuálně zkontrolovaným záznamem a jednou událostí
+prošel přes `put → log → export`. Vytvořený ZIP obsahoval `research.json`,
+historii, zdrojový obrázek, výřez a manifest s revizí, velikostmi a SHA-256.
+Příkaz `restore` jej obnovil do nové složky, kde `check` i `resume` potvrdily
+shodný stav. Následný `log` vytvořil další revizi, takže nešlo jen o čtení
+archivu, ale o skutečné navázání na obnovený stav.
+
+Samostatné testy změnily bajt zdrojového obrázku bez úpravy manifestu a ověřily
+odmítnutí balíčku i odstranění dočasné obnovy. Ověřeno bylo také odmítnutí
+`../` cesty, symlinku, výstupu v git repozitáři a existující cílové složky.
+
+Stejný lokální průchod byl proveden také se soukromou pracovní kopií pilotu
+MZA: citace knihy 2726, screenshot snímku 2 a jeho výřez byly uloženy jako
+`draft` bez vymyšleného přepisu. `check` potvrdil revizi 1 a jeden záznam.
+Export obsahoval čtyři datové soubory a manifest; SHA-256 výsledného ZIP je
+`25c7d3ef72da568372c0be622f01a70b87531d83f55ad1e993d0d98d3fa2dddd`.
+Obnova do nové složky zachovala SHA-256 screenshotu i výřezu a následný zápis
+poznámky vytvořil revizi 2. Soukromé pracovní soubory a ZIP zůstaly mimo
+repozitář.
+
+Jde zatím o lokální přenos v jednom prostředí, nikoli o důkaz trvalého
+cloudového uložení nebo navázání v nové uživatelské konverzaci.
 
 ## Co ověřeno není
 

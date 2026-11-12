@@ -80,13 +80,18 @@ description: >-
    a explicitní důvody ztotožnění. Nepotvrzuje paleografickou či historickou správnost.
 5. Při změně revize načíst stav znovu a věcně spojit změny. Při změně kontrolního součtu
    nejprve vyšetřit rozdíl, neoznačit nový soubor automaticky za původní.
-6. Uložit soukromou složku (stav, historii a všechny odkazované snímky)
-   do uživatelem určeného trvalého soukromého úložiště. Je-li dostupná ChatGPT Library
-   a uživatel neurčil jiné místo, použít ji podle jejích aktuálních instrukcí.
-   Lokální skripty tuto synchronizaci nedělají. Zpětně ověřit uložený stav a snímky.
-7. Potvrdit trvalé uložení až po úspěšném zápisu. Jinak říci, že stav zůstává pouze
-   v pracovní kopii. Neslibovat navázání závislé na neuložených souborech.
-8. Stručně shrnout zjištění, nejistoty, zdroj a další krok. Zobrazit relevantní výřez,
+6. Před přenosem spustit `check` a vytvořit balíček příkazem
+   `research.py --workspace <složka> export <výstup.zip>`. Výstup musí být mimo
+   badatelskou složku i git repozitář. Uchovat vrácený SHA-256; podrobnosti jsou
+   v [datové referenci](references/data.md).
+7. Balíček uložit do uživatelem určeného trvalého soukromého úložiště. Lokální
+   skript jej nenahrává ani nešifruje; přístupová práva a přenos řeší zvolené úložiště.
+8. Při navázání obnovit balíček příkazem `restore` do nové neexistující složky,
+   znovu spustit `check` a `resume` a porovnat revizi, další krok a kontrolní součty.
+9. Potvrdit trvalé uložení až po úspěšném zápisu a zpětném ověření. Jinak říci,
+   že stav zůstává pouze v pracovní kopii. Neslibovat navázání závislé na
+   neuložených souborech.
+10. Stručně shrnout zjištění, nejistoty, zdroj a další krok. Zobrazit relevantní výřez,
    pokud je dostupný a prostředí to podporuje. Nezveřejňovat soukromá data v repozitáři.
 
 ## Respektovat archiv a rozsah
