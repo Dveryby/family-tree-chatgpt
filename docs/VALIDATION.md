@@ -1,8 +1,8 @@
 # Ověření verze 0.3.0
 
 Datum: 10.–12. listopadu 2026. První průchod: Linux, Python 3.12.14,
-Pillow 13.0.0. Rozšířená sada 44 testů byla znovu spuštěna na Pythonu 3.13.5
-s Pillow 11.1.0.
+Pillow 13.0.0. Rozšířená sada 50 testů byla znovu spuštěna na Pythonu 3.13.5
+s Pillow 11.1.0; šest nových testů po vydání 0.3.0 ověřuje Gramps adaptér.
 
 ## Automatické testy
 
@@ -12,7 +12,7 @@ Příkaz z kořene repozitáře:
 python3 -m unittest discover -s tests -v
 ```
 
-Výsledek: **44 testů prošlo**.
+Výsledek: **50 testů prošlo**.
 
 - Přesné pixely a velikost výřezu; zachování originálu; EXIF orientace.
 - Odmítnutí chybných či prázdných souřadnic a přepsání výstupu/originálu.
@@ -57,8 +57,39 @@ Výsledek: **44 testů prošlo**.
   předchozí revize v `history/` a bez automatického vytváření genealogických faktů.
 - Jednotné CLI `family_tree.py`: společný průchod příkazy `project`, `record`,
   `model`, `gedcom` a `image`, včetně čtecího výběru jedné modelové entity.
+- Gramps Web: syntetické mapování pouze podporovaných tvrzení, vyloučení
+  neověřených tvrzení a otevřených konfliktů, soukromé osoby, událost a
+  rodičovská rodina, stabilní identifikátory a zdrojové poznámky.
+- Příkazy `gramps probe`, `plan`, `push` a `status` nad in-memory náhradou API:
+  oprávnění `0600` plánu, opakovaný stav `synchronized`, kontrola hashů,
+  odmítnutí kolize, změněného plánu a nešifrovaného HTTP.
 
 Strukturální validace balíčku proběhla nástrojem `quick_validate.py` bez chyb.
+
+## Syntetická integrace Gramps Web 12. listopadu 2026
+
+Vedle in-memory API testů proběhl úplný průchod proti oficiálnímu obrazu
+`ghcr.io/gramps-project/grampsweb:latest` s digestem
+`sha256:80a1d75ca0f67f9203aecca60f7639312a2769fe0af45b34608b0add64f7c07f`.
+Dočasná instance bez svazků hlásila Gramps Web API 3.25.2, Gramps 6.0.8 a
+datové schéma 21.0.0. Syntetický účet měl roli Editor; spojení bylo pouze na
+lokálním portu a HTTP bylo povoleno výslovným testovacím přepínačem.
+
+První skutečný požadavek zachytil dvě odlišnosti od starší statické OpenAPI
+specifikace 3.7.2: kolekce používají koncovou lomítkovou cestu, zatímco detail
+objektu nikoli, a `SrcAttribute` má užší pole než obecný atribut. Adaptér byl
+zúžen na společnou podmnožinu a rozlišuje oba tvary endpointů. Další čistý
+průchod v novém prázdném kontejneru doložil:
+
+- `probe`: kompatibilní API a správná identita prázdného stromu,
+- `plan`: 20 operací `create`, žádná kolize ani varování,
+- `push`: 20 objektů vytvořeno a všech 20 zpětně načteno a ověřeno,
+- `status`: `synchronized`, 20 `unchanged`, 0 `create`, 0 `conflict`.
+
+Scénář obsahoval dva syntetické lidi, jedno datum narození, jeden doložený
+rodičovský vztah, archiv, pramen, sedm citací a sedm výzkumných poznámek.
+Kontejner běžel s `--rm`, bez hostitelských svazků, a po ověření byl odstraněn.
+Žádné skutečné rodinné údaje ani soukromý produkční server nebyly použity.
 
 ## Průchod pracovním postupem
 
@@ -143,8 +174,10 @@ vizuální kontrolu, nikoli ztotožnění osoby nebo bezchybnou modernizaci jmen
 - Nezávislá druhá paleografická kontrola a modernizace historických příjmení.
 - Funkčnost na Windows/macOS či Pythonu 3.11; vyzkoušeno bylo uvedené linuxové prostředí.
 - Import skutečného uživatelského GEDCOMu; automatické testy používají pouze
-  syntetická data. Dále nejsou ověřeny Gramps, automatické hledání, původní
-  databázové schéma ani web.
+  syntetická data. Gramps adaptér je ověřen syntetickými API odpověďmi a
+  dočasnou skutečnou instancí, ale ne produkční soukromou instancí ani
+  skutečnými rodinnými údaji. Dále nejsou ověřeny automatické hledání, původní
+  databázové schéma ani rodinný web.
 - Obrazové deriváty `image_review.py` jsou automaticky ověřené na syntetických
   obrázcích, ne na reprezentativním souboru různých skutečných archivních
   formátů a kvalit.

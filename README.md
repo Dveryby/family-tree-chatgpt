@@ -20,8 +20,12 @@ Nový badatelský stav formátu 2 odděluje pracovní identity od dokazovaných
 tvrzení, citací a rozporů; starší formát 1 lze výslovně migrovat. Dílčí skripty
 jsou dostupné přes jedno stabilní příkazové rozhraní.
 Všech 31 nástrojů původního projektu bylo funkčně roztříděno; užitečné offline
-postupy byly adaptovány, zatímco síťové a webové nástroje zůstávají odložené
-do samostatného ověření.
+postupy byly adaptovány, zatímco síťové archivní a webové nástroje zůstávají
+odložené do samostatného ověření.
+Ve vývoji po vydání 0.3.0 přibyl bezpečný jednosměrný adaptér pro Gramps Web
+API 3.x s příkazy `probe`, `plan`, `push` a `status`. Je ověřen jednotkovými
+testy i úplným syntetickým průchodem proti dočasnému oficiálnímu Gramps Web
+API 3.25.2 / Gramps 6.0.8; skutečná rodinná data použita nebyla.
 
 Zdroj postupu je ve [skills/family-tree-chatgpt](skills/family-tree-chatgpt). Přehled převodu a odložených nástrojů je v [docs/PORTING.md](docs/PORTING.md), výsledky ověření v [docs/VALIDATION.md](docs/VALIDATION.md).
 
@@ -41,6 +45,15 @@ projektu.
 - výslovná migrace formátu 1 při zachování historie a kompatibility exportu,
 - jednotné CLI `family_tree.py` pro projekt, zápisy, model, GEDCOM a obrázky,
 - rozšířená sada 44 syntetických testů.
+
+## Vývoj po verzi 0.3.0
+
+- append-only propojení s Gramps Web API 3.x bez přímého zápisu do databáze,
+- export pouze podporovaných tvrzení mimo otevřené konflikty,
+- mapování osob, jmen, vybraných událostí, rodičovské vazby, pramenů, citací a
+  výzkumných poznámek,
+- soukromý plán opatřený SHA-256 s kontrolou serveru, stromu, revize a stavu,
+- odmítnutí mazání, vzdálených aktualizací, kolizí a nešifrovaného připojení.
 
 ## Novinky ve verzi 0.2.0
 
@@ -79,7 +92,8 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
   kvality, frontu předků a metodiku ověřování.
 - [x] Navrhnout obecný model osob, vztahů, tvrzení, pramenů a konfliktů.
 - [x] Sjednotit dílčí skripty pod jedno stabilní příkazové rozhraní.
-- [ ] Později posoudit propojení s Gramps Web a rodinný web.
+- [x] Posoudit Gramps Web a implementovat bezpečný jednosměrný adaptér.
+- [ ] Posoudit samostatný rodinný web a případnou obousměrnou synchronizaci.
 
 ## Kvalita bádání
 
@@ -94,8 +108,8 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
 
 Vyžaduje Python 3.11+ a pro obrazové nástroje Pillow. Testováno na kombinacích
 Python 3.12.14 / Pillow 13.0.0 a Python 3.13.5 / Pillow 11.1.0. Projektové,
-modelové a GEDCOM příkazy používají pouze standardní knihovnu Pythonu; Pillow
-se načítá až pro obrazové příkazy.
+modelové, GEDCOM a Gramps příkazy používají pouze standardní knihovnu Pythonu;
+Pillow se načítá až pro obrazové příkazy.
 
 ```sh
 python3 -m pip install -r requirements.txt
@@ -107,16 +121,22 @@ python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mim
 python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani project export /soukrome-uloziste/badani.zip
 python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /nova/cesta/obnovene-badani project restore /soukrome-uloziste/badani.zip
 python3 skills/family-tree-chatgpt/scripts/family_tree.py gedcom import /soukrome-uloziste/strom.ged /soukrome-uloziste/strom-import.json
+python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps probe --url https://rodokmen.example.cz --username editor
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani gramps plan /soukrome-uloziste/gramps-plan.json --url https://rodokmen.example.cz --username editor
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani gramps push /soukrome-uloziste/gramps-plan.json --url https://rodokmen.example.cz --username editor
 python3 skills/family-tree-chatgpt/scripts/family_tree.py image split /soukrome-uloziste/snimky/scan.png /soukrome-uloziste/snimky/left.png /soukrome-uloziste/snimky/right.png
 ```
 
 Cesta je příklad; zvol vlastní soukromou složku mimo git repozitáře. Další
 příkazy a formát zápisu jsou v [datové referenci](skills/family-tree-chatgpt/references/data.md),
 obecné entity a konflikty v [referenci modelu](skills/family-tree-chatgpt/references/model.md)
-a GEDCOM v [samostatném návodu](skills/family-tree-chatgpt/references/gedcom.md).
+a GEDCOM i Gramps Web v samostatných návodech
+[GEDCOM](skills/family-tree-chatgpt/references/gedcom.md) a
+[Gramps](skills/family-tree-chatgpt/references/gramps.md).
 Skripty samy nečtou písmo, neověřují totožnost osoby a neprovádějí cloudové
 ukládání. Importovaný GEDCOM je veden jako soubor neověřených tvrzení, nikoli
-jako archivní důkaz, a bez vědomého mapování nemění obecný model.
+jako archivní důkaz, a bez vědomého mapování nemění obecný model. Gramps export
+je jednosměrný, append-only a ponechává `research.json` jako autoritativní stav.
 
 ## Kód a rodinná data
 

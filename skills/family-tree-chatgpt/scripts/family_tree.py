@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 import gedcom
+import gramps
 import research
 
 
@@ -119,11 +120,50 @@ def image_command(args):
     )
 
 
+def gramps_client(args):
+    client = gramps.Client(
+        args.url,
+        timeout=args.timeout,
+        allow_http=args.allow_http,
+    )
+    gramps.authenticate(
+        client,
+        username=args.username,
+        password_env=args.password_env,
+        token_env=args.token_env,
+    )
+    return client
+
+
+def gramps_command(args):
+    client = gramps_client(args)
+    if args.gramps_command == "probe":
+        return gramps.probe(client)
+
+    root = require_workspace(args)
+    state = research.read_state(root)
+    errors = research.check_state(state, root)
+    if errors:
+        raise ValueError("\n".join(errors))
+    state_hash = research.sha256(root / "research.json")
+    if args.gramps_command == "push":
+        plan = gramps.validate_plan(private_json(args.plan_json))
+        return gramps.push(client, plan, state["revision"], state_hash)
+
+    plan = gramps.make_plan(client, state, state_hash)
+    if args.gramps_command == "status":
+        return gramps.status(plan)
+    output = gramps.write_plan(args.output, plan, research.in_git_tree)
+    return gramps.plan_summary(plan, output)
+
+
 def execute(args):
     if args.command == "gedcom":
         return gedcom_import(args)
     if args.command == "image":
         return image_command(args)
+    if args.command == "gramps":
+        return gramps_command(args)
 
     root = require_workspace(args)
     if args.command == "project":
@@ -225,6 +265,34 @@ def build_parser():
     show = model_commands.add_parser("show", help="zobrazit obecný model nebo jeho část")
     show.add_argument("--collection", choices=research.MODEL_COLLECTIONS)
     show.add_argument("--id")
+
+    gramps_parser = commands.add_parser(
+        "gramps", help="bezpečné append-only propojení s Gramps Web API"
+    )
+    gramps_commands = gramps_parser.add_subparsers(dest="gramps_command", required=True)
+
+    def add_gramps_connection(command):
+        command.add_argument("--url", required=True, help="základní URL instance Gramps Web")
+        command.add_argument("--username", help="uživatel; heslo se neuvádí na příkazové řádce")
+        command.add_argument("--password-env", default="GRAMPS_WEB_PASSWORD")
+        command.add_argument("--token-env", default="GRAMPS_WEB_TOKEN")
+        command.add_argument("--timeout", type=float, default=20)
+        command.add_argument(
+            "--allow-http",
+            action="store_true",
+            help="povolit nešifrované HTTP pouze pro izolovaný lokální test",
+        )
+
+    probe = gramps_commands.add_parser("probe", help="ověřit spojení a kompatibilitu bez zápisu")
+    add_gramps_connection(probe)
+    plan = gramps_commands.add_parser("plan", help="vytvořit soukromý append-only plán")
+    plan.add_argument("output", type=Path)
+    add_gramps_connection(plan)
+    push = gramps_commands.add_parser("push", help="provést beze změn uložený plán")
+    push.add_argument("plan_json", type=Path)
+    add_gramps_connection(push)
+    status = gramps_commands.add_parser("status", help="porovnat podporovaná tvrzení se serverem")
+    add_gramps_connection(status)
 
     gedcom_parser = commands.add_parser("gedcom", help="bezpečný offline import GEDCOM tvrzení")
     gedcom_commands = gedcom_parser.add_subparsers(dest="gedcom_command", required=True)

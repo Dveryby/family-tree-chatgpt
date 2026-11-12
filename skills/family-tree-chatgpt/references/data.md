@@ -5,7 +5,9 @@
 - Python 3.11+; `research.py` používá standardní knihovnu.
 - Obrazové příkazy potřebují Pillow. Závislost nejprve ověřit v existujícím prostředí.
 - Příklady volají skripty ze složky balíčku. Skutečné cesty odvodit ze složky načteného skillu.
-- Skripty nemají síťový přístup ani trvalé cloudové ukládání.
+- Projektové, modelové, GEDCOM a obrazové příkazy zůstávají offline. Pouze
+  výslovná skupina `gramps` používá síť podle [samostatné reference](gramps.md);
+  žádný příkaz neprovádí trvalé cloudové ukládání badatelského ZIPu.
 - Stabilní vstup je `scripts/family_tree.py`. Samostatné `research.py`,
   `gedcom.py`, `crop.py` a `image_review.py` zůstávají kvůli kompatibilitě,
   ale nové postupy mají používat jednotné CLI.

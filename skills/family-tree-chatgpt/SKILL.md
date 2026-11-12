@@ -4,10 +4,10 @@ description: >-
   Český genealogický pracovní postup pro čtení jednoho matričního zápisu,
   přepis a překlad snímku, evidenci pramenů, posouzení totožnosti osob,
   správu osob, vztahů, tvrzení a konfliktů, import neověřených GEDCOM tvrzení
-  a navázání na rozpracované bádání. Použij
+  a jednosměrný export podporovaných tvrzení do Gramps Web. Použij
   při dotazech na rodokmen, předky a matriky, pokud uživatel dodá snímek, odkaz,
   GEDCOM nebo existující badatelský stav. Nezajišťuje automatické procházení
-  archivů, správu Gramps ani rodinný web.
+  archivů, obousměrnou synchronizaci Gramps ani rodinný web.
 ---
 
 # Rodokmen pro ChatGPT
@@ -141,7 +141,25 @@ rozpory číst [referenci modelu](references/model.md).
    že stav zůstává pouze v pracovní kopii. Neslibovat navázání závislé na
    neuložených souborech.
 10. Stručně shrnout zjištění, nejistoty, zdroj a další krok. Zobrazit relevantní výřez,
-   pokud je dostupný a prostředí to podporuje. Nezveřejňovat soukromá data v repozitáři.
+    pokud je dostupný a prostředí to podporuje. Nezveřejňovat soukromá data v repozitáři.
+
+## Publikovat podporovaná tvrzení do Gramps Web
+
+Při výslovném požadavku na Gramps přečíst [referenci Gramps](references/gramps.md).
+
+1. `research.json` zůstává autoritativním badatelským stavem; Gramps Web je
+   odvozená soukromá vrstva.
+2. Nejprve spustit `gramps probe`. Heslo nedávat do argumentu, plánu ani logu.
+3. Vytvořit soukromý plán mimo Git příkazem `gramps plan` a zkontrolovat
+   varování, vyloučená tvrzení a počty `create`, `unchanged`, `conflict`.
+4. Přenášet jen `supported` tvrzení mimo otevřené konflikty. Pracovní popisek
+   osoby nepovažovat za doložené jméno.
+5. `gramps push` použít jen na zkontrolovaný plán a testovací či zálohovaný
+   strom. Adaptér nic nemaže ani nepřepisuje; kolizi řešit ručně.
+6. Po síťové chybě či úspěšném zápisu spustit `gramps status`. Zápis neopakovat
+   naslepo, protože vzdálené vytvoření objektů nelze lokálně vrátit.
+7. Soubory pramenů, neověřená tvrzení, zamítnuté varianty a úplná struktura
+   konfliktů zůstávají v soukromém badatelském stavu.
 
 ## Respektovat archiv a rozsah
 
@@ -149,7 +167,8 @@ rozpory číst [referenci modelu](references/model.md).
 - Při blokaci nebo CAPTCHA nepřidávat alternativní síťové cesty. Řídit se pokyny nástroje;
   pokud je nutná akce uživatele, předat pouze potřebný krok.
 - Bez dostupného pramene nehlásit dohledání. Odhad a hypotézu vždy označit.
-- Gramps, hromadné hledání, vizualizace grafu a web jsou mimo tuto verzi.
-  U takového požadavku pojmenovat chybějící funkci a udělat dostupnou část práce.
+- Obousměrná synchronizace Gramps, hromadné hledání, vizualizace grafu a rodinný
+  web jsou mimo tuto verzi. U takového požadavku pojmenovat chybějící funkci a
+  udělat dostupnou část práce.
 
 Původ adaptace a úplná licence: [references/upstream.md](references/upstream.md), `LICENSE`.
