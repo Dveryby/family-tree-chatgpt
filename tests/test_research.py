@@ -85,6 +85,46 @@ class ResearchTests(unittest.TestCase):
         self.record["identity"]["status"] = "supported"
         self.assertTrue(research.validate_record(self.record, self.root))
 
+    def test_audit_reports_quality_warnings_without_invalidating_state(self):
+        record = self.reviewed()
+        record["uncertainties"] = ["Synteticky nejisté čtení."]
+        research.update(self.root, 0, record=record, next_step="Zkontrolovat nejistotu.")
+        second = deepcopy(record)
+        second["id"] = "synthetic_002"
+        research.update(self.root, 1, record=second, next_step="Rozlišit dva zápisy.")
+        state = research.read_state(self.root)
+        self.assertFalse(research.check_state(state, self.root))
+        audit = research.audit_state(state)
+        codes = [item["code"] for item in audit["warnings"]]
+        self.assertEqual(audit["reading_status"]["reviewed"], 2)
+        self.assertIn("reviewed_without_translation", codes)
+        self.assertIn("reviewed_without_interpretation", codes)
+        self.assertIn("open_reading_uncertainties", codes)
+        self.assertIn("duplicate_source_locator", codes)
+
+    def test_audit_flags_identity_conclusion_before_review(self):
+        self.record["identity"] = {
+            "status": "supported",
+            "rationale": "Syntetické zdůvodnění.",
+            "evidence": ["Syntetická citace."],
+        }
+        research.update(self.root, 0, record=self.record, next_step="Vizuálně ověřit.")
+        audit = research.audit_state(research.read_state(self.root))
+        self.assertIn("identity_before_review", [item["code"] for item in audit["warnings"]])
+
+    def test_cli_audit_is_read_only(self):
+        script = str(SKILL / "scripts/research.py")
+        before = (self.root / "research.json").read_bytes()
+        completed = subprocess.run(
+            [sys.executable, script, "--workspace", str(self.root), "audit"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        result = json.loads(completed.stdout)
+        self.assertIn("no_records", [item["code"] for item in result["warnings"]])
+        self.assertEqual((self.root / "research.json").read_bytes(), before)
+
     def test_changed_scan_is_detected_and_blocks_update(self):
         research.update(self.root, 0, record=self.reviewed(), next_step="Ověřit.")
         Image.new("RGB", (100, 80), "black").save(self.root / "sources/scan.png")

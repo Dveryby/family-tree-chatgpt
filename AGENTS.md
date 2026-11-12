@@ -2,7 +2,10 @@
 
 ## Cíl a stav
 - Před změnami přečti README.md a zkontroluj aktuální stav repozitáře.
-- První milník je jeden doložený průchod od matričního zápisu po uložený výsledek a navázání v nové konverzaci.
+- Cílem projektu je obecný nástroj pro dohledatelný genealogický výzkum; osoby
+  z pilotních zápisů jsou testovací případy, ne výzkumný cíl projektu.
+- První milník je jeden doložený průchod od matričního zápisu po uložený
+  výsledek a navázání v nové konverzaci; tento akceptační milník je splněný.
 - Za hotové označuj pouze kroky s důkazem; plán, implementace a ověření jsou odlišné stavy.
 - Komunikuj s uživatelem česky. Technické volby řeš samostatně v rámci zadání.
 

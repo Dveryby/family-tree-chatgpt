@@ -147,6 +147,92 @@ def check_state(state, root):
     return errors
 
 
+def audit_state(state):
+    """Return non-blocking quality warnings for a structurally valid state.
+
+    The separation of hard errors from research warnings adapts the approach in
+    rodokmen-skill tools/kontrola.py (MIT), revision 0fb0c037. The checks are
+    rewritten for this project's evidence-record schema.
+    """
+    warnings = []
+    reading_status = {name: 0 for name in ("unread", "draft", "reviewed")}
+    identity_status = {name: 0 for name in ("unresolved", "supported", "rejected")}
+    event_results = {}
+    locations = {}
+    for key, record in state["records"].items():
+        status = record["reading_status"]
+        reading_status[status] += 1
+        identity = record["identity"]
+        identity_status[identity["status"]] += 1
+        source = record["source"]
+        locator = tuple(source[field].strip() for field in ("archive", "reference", "page", "url"))
+        if all(locator):
+            locations.setdefault(locator, []).append(key)
+        complete_review = (
+            record["visual_review"] is True
+            and record["transcription"].strip()
+            and all(source[field].strip() for field in (
+                "archive", "reference", "page", "url", "accessed_on", "file", "crop"
+            ))
+        )
+        if status == "draft" and complete_review:
+            warnings.append({
+                "code": "draft_ready_for_review",
+                "record_id": key,
+                "message": "Draft má citaci, přepis, snímky a vizuální kontrolu; rozhodni, zda může být reviewed.",
+            })
+        if status == "reviewed" and not record["translation"].strip():
+            warnings.append({
+                "code": "reviewed_without_translation",
+                "record_id": key,
+                "message": "Vizuálně zkontrolovaný zápis nemá samostatný překlad.",
+            })
+        if status == "reviewed" and not record["interpretation"].strip():
+            warnings.append({
+                "code": "reviewed_without_interpretation",
+                "record_id": key,
+                "message": "Vizuálně zkontrolovaný zápis nemá samostatnou interpretaci.",
+            })
+        if status == "reviewed" and record["uncertainties"]:
+            warnings.append({
+                "code": "open_reading_uncertainties",
+                "record_id": key,
+                "message": f"Zápis má {len(record['uncertainties'])} výslovně otevřených nejistot; ponech je viditelné.",
+            })
+        if identity["status"] in ("supported", "rejected") and status != "reviewed":
+            warnings.append({
+                "code": "identity_before_review",
+                "record_id": key,
+                "message": "Závěr o totožnosti existuje dříve než vizuálně zkontrolované čtení zápisu.",
+            })
+    for locator, record_ids in locations.items():
+        if len(record_ids) > 1:
+            warnings.append({
+                "code": "duplicate_source_locator",
+                "record_ids": record_ids,
+                "message": (
+                    "Více záznamů používá stejný archiv, signaturu, stranu/snímek a URL; "
+                    "ověř, zda jde úmyslně o více položek na jednom snímku."
+                ),
+            })
+    for event in state["events"]:
+        result = event.get("result", "unknown")
+        event_results[result] = event_results.get(result, 0) + 1
+    if not state["records"]:
+        warnings.append({
+            "code": "no_records",
+            "message": "Badatelský stav zatím neobsahuje žádný archivní zápis.",
+        })
+    return {
+        "revision": state["revision"],
+        "records": len(state["records"]),
+        "reading_status": reading_status,
+        "identity_status": identity_status,
+        "event_results": event_results,
+        "warnings": warnings,
+    }
+
+
 def atomic_json(path, state):
     fd, name = tempfile.mkstemp(prefix=".research-", dir=path.parent)
     try:
@@ -471,7 +557,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", required=True)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "resume", "check"):
+    for name in ("init", "resume", "check", "audit"):
         commands.add_parser(name)
     export = commands.add_parser("export")
     export.add_argument("bundle", type=Path)
@@ -507,6 +593,8 @@ def main(argv=None):
             raise ValueError("\n".join(errors))
         if args.command == "check":
             print(json.dumps({"valid": True, "revision": state["revision"], "records": len(state["records"])}))
+        elif args.command == "audit":
+            print(json.dumps(audit_state(state), ensure_ascii=False, indent=2))
         else:
             print(json.dumps(state, ensure_ascii=False, indent=2))
         return 0

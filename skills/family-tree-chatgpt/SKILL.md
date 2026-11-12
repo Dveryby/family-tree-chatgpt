@@ -2,10 +2,11 @@
 name: family-tree-chatgpt
 description: >-
   Český genealogický pracovní postup pro čtení jednoho matričního zápisu,
-  přepis a překlad snímku, evidenci pramenů, posouzení totožnosti osob
-  a navázání na rozpracované bádání. Použij při dotazech na rodokmen,
-  předky a matriky, pokud uživatel dodá snímek, odkaz nebo existující badatelský stav.
-  Nezajišťuje zatím automatické procházení archivů, import GEDCOM, správu Gramps ani rodinný web.
+  přepis a překlad snímku, evidenci pramenů, posouzení totožnosti osob,
+  import neověřených GEDCOM tvrzení a navázání na rozpracované bádání. Použij
+  při dotazech na rodokmen, předky a matriky, pokud uživatel dodá snímek, odkaz,
+  GEDCOM nebo existující badatelský stav. Nezajišťuje automatické procházení
+  archivů, správu Gramps ani rodinný web.
 ---
 
 # Rodokmen pro ChatGPT
@@ -23,6 +24,22 @@ description: >-
    `python scripts/research.py --workspace <soukromá-složka> init`.
    Použít Python 3.11+. Složka obsahuje pouze lokální pracovní kopii,
    dokud ji skutečně neuložíš do trvalého soukromého úložiště.
+
+## Importovat GEDCOM jako neověřená tvrzení
+
+1. Číst [návod GEDCOM](references/gedcom.md). Vstupní `.ged` i výstupní JSON
+   musí zůstat v soukromé složce mimo Git.
+2. Spustit `python3 scripts/gedcom.py <strom.ged> <nový-výstup.json>`. Nástroj
+   vstup nemění a odmítne přepsat existující výstup.
+3. Zkontrolovat `warnings` a `research_plan`. Neznámé rozšíření se zachovává,
+   ale není automaticky interpretováno.
+   Je-li známá výchozí osoba, přidat `--root @ID@`; soukromý výstup pak obsahuje
+   Kekulého pozice a výzkumnou frontu předků. Vazby i navržené výchozí události
+   zůstávají neověřenými tvrzeními.
+4. Osoby, vztahy, data a prameny z GEDCOM vést jako `unverified_claims`.
+   Nezaměňovat přítomnost `SOUR` za vizuální ověření původního pramene.
+5. Podle `research_plan` postupně získávat skutečné doklady. Ověřený matriční
+   zápis ukládat přes `research.py`; GEDCOM import sám `research.json` nemění.
 
 ## Otevřít a identifikovat pramen
 
@@ -49,6 +66,10 @@ description: >-
    Potřeba je Pillow; podrobnosti jsou v [referenci dat](references/data.md).
 3. Vizuálně prohlédnout originál i výřez skutečným nástrojem pro obrázky.
    Skript pouze ořezává; nečte písmo a nepotvrzuje správnost přepisu.
+   Pro široký zápis lze použít `scripts/image_review.py split`, pro kontrolu
+   rozsahu `mark` a pro přehled několika již uložených snímků `sheet`. Tyto
+   režimy pracují pouze s místními soubory a vytvářejí deriváty mimo Git;
+   kontrastní kopie nikdy nenahrazuje originál.
 4. Přepisovat originální znění. Nejisté čtení označit `(?)`, nečitelné místo `[…]`.
    Neodhadovat jméno podle očekávaného předka. Nepoužívat generativní opravy písma.
 5. Překlad do češtiny držet zvlášť; zachovat význam, nejasnosti a původní míru jistoty.
@@ -56,6 +77,9 @@ description: >-
    Rozlišovat datum narození/křtu, sňatku/ohlášek a úmrtí/pohřbu.
 
 ## Posoudit totožnost osoby samostatně
+
+Při spojování generací, rozporech nebo mrtvém bodu číst
+[metodiku ověřování](references/methodology.md).
 
 - Hledat souvislost v rodičích, partnerovi, čísle domu, obci, povolání a chronologii;
   ověřit také stejně pojmenované kandidáty, další sňatky a možné přestěhování.
@@ -78,6 +102,9 @@ description: >-
    `--scope "Kniha, roky, snímky a dotaz"`, `--expected-revision <n>` a `--next-step`.
 4. Spustit `check`. Kontrola ověřuje strukturu, citace pro `reviewed`, SHA-256 snímků
    a explicitní důvody ztotožnění. Nepotvrzuje paleografickou či historickou správnost.
+   Potom spustit `audit`; ten nemění stav a vypíše neblokující varování, například
+   chybějící překlad či interpretaci, otevřené nejistoty nebo stejnou citaci u
+   více záznamů. Varování posoudit věcně, neodstraňovat je mechanicky.
 5. Při změně revize načíst stav znovu a věcně spojit změny. Při změně kontrolního součtu
    nejprve vyšetřit rozdíl, neoznačit nový soubor automaticky za původní.
 6. Před přenosem spustit `check` a vytvořit balíček příkazem
@@ -100,7 +127,7 @@ description: >-
 - Při blokaci nebo CAPTCHA nepřidávat alternativní síťové cesty. Řídit se pokyny nástroje;
   pokud je nutná akce uživatele, předat pouze potřebný krok.
 - Bez dostupného pramene nehlásit dohledání. Odhad a hypotézu vždy označit.
-- GEDCOM, Gramps, hromadné hledání, graf osob a web jsou mimo tuto první verzi.
+- Gramps, hromadné hledání, graf osob a web jsou mimo tuto první verzi.
   U takového požadavku pojmenovat chybějící funkci a udělat dostupnou část práce.
 
 Původ adaptace a úplná licence: [references/upstream.md](references/upstream.md), `LICENSE`.

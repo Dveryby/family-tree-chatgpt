@@ -1,16 +1,18 @@
-# Ověření první lokální verze
+# Ověření verze 0.2.0
 
-Datum: 10.–12. listopadu 2026. Prostředí: Linux, Python 3.12.14, Pillow 13.0.0.
+Datum: 10.–12. listopadu 2026. První průchod: Linux, Python 3.12.14,
+Pillow 13.0.0. Rozšířená sada 38 testů byla znovu spuštěna na Pythonu 3.13.5
+s Pillow 11.1.0.
 
 ## Automatické testy
 
 Příkaz z kořene repozitáře:
 
 ```sh
-python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
 ```
 
-Výsledek: **20 testů prošlo**.
+Výsledek: **38 testů prošlo**.
 
 - Přesné pixely a velikost výřezu; zachování originálu; EXIF orientace.
 - Odmítnutí chybných či prázdných souřadnic a přepsání výstupu/originálu.
@@ -29,6 +31,23 @@ Výsledek: **20 testů prošlo**.
 - Pokračování další revizí po obnově; odmítnutí změněného obsahu, nebezpečné
   cesty, symlinku, cíle v git repozitáři a přepsání existujícího projektu.
 - Úklid neúplné obnovy a zámku po odmítnuté operaci.
+- Import syntetického GEDCOM 5.5.1 s osobami, rodinou, událostmi, pramenem,
+  pokračováním textu a uživatelským rozšířením.
+- Rozlišení GEDCOM tvrzení od ověřených důkazů a vytvoření plánu pro chybějící
+  narození/křty a události bez použitelného pramene.
+- Odmítnutí porušené hierarchie, duplicitních identifikátorů, ANSEL vstupu,
+  vstupních či výstupních symlinků, přepsání výstupu a uložení soukromého
+  importu do git repozitáře.
+- Zachování chybějících rodinných a zdrojových odkazů jako varování, nikoli faktů.
+- Volitelná GEDCOM fronta předků s Kekulého čísly, pracovní kotvou, limitem
+  generací i počtu pozic, zastavením při více nerozlišených `FAMC` rodinách a
+  detekcí cyklu.
+- Rozdělení místního snímku na překrývající se části, označení kontrolované
+  oblasti a montáž již uložených snímků; zachování originálu, odstranění EXIF,
+  oprávnění `0600`, zákaz přepsání, symlinků a výstupu do Git repozitáře.
+- Čtecí `audit` výzkumného stavu: počty stavů, chybějící překlad či
+  interpretace, otevřené nejistoty, závěr o totožnosti před kontrolou čtení a
+  možné duplicitní citace; audit stav nemění.
 
 Strukturální validace balíčku proběhla nástrojem `quick_validate.py` bez chyb.
 
@@ -70,17 +89,71 @@ Obnova do nové složky zachovala SHA-256 screenshotu i výřezu a následný z�
 poznámky vytvořil revizi 2. Soukromé pracovní soubory a ZIP zůstaly mimo
 repozitář.
 
-Jde zatím o lokální přenos v jednom prostředí, nikoli o důkaz trvalého
-cloudového uložení nebo navázání v nové uživatelské konverzaci.
+## Přenos přes trvalé úložiště a novou konverzaci 12. listopadu 2026
+
+Soukromý stav pilotu MZA v revizi 2 byl exportován mimo repozitář do trvalého
+soukromého úložiště. Nová uživatelská konverzace dostala projekt a tento ZIP,
+nikoli historii původní konverzace. Příkaz `restore` obnovil stav do nové složky;
+`check` a `resume` potvrdily revizi 2, jeden záznam, uložený další krok a shodné
+SHA-256 zdrojového screenshotu a výřezu.
+
+Nová konverzace následně skutečně pokračovala zápisem celé další revize s
+`--expected-revision 2`. Vznikla revize 3, `check` ji označil za platnou a
+`resume` ji znovu načetl. Nový balíček byl uložen v soukromém úložišti jako
+`mza-badani-r3-2026-11-12.zip`; jeho SHA-256 je
+`81452c270c08c0aca1a605214933079a92851899537bca425b05de928f99745a`.
+Soukromý přepis ani obrazová data nejsou součástí repozitáře.
+
+Tím je prakticky ověřen přenos úplného stavu přes trvalé soukromé úložiště,
+obnova v nové konverzaci a pokračování novou revizí. Paleografická správnost
+pracovního přepisu tím potvrzena není.
+
+## Dokončení prvního skutečného zápisu 12. listopadu 2026
+
+Revize 3 byla z trvalého soukromého úložiště obnovena do nové pracovní složky.
+První řádek snímku 2 matriky MZA č. 2726 byl znovu porovnán se živým archivním
+prohlížečem při větším zvětšení. Datum, pokřtěný, rodiče, kmotři, obec a zápis
+křtícího byly vizuálně zkontrolovány. Historický pravopis zůstal v přepisu,
+normalizace byla oddělena do českého překladu a nerozvedená zkratka zůstala
+výslovně nejistá. Totožnost s jinou osobou nebyla bez dalšího pramene tvrzena.
+
+Úplný záznam obsahující přepis, překlad, interpretaci a nejistoty byl uložen s
+`--expected-revision 3` jako revize 4 a stavem `reviewed`. `check` vrátil
+`valid: true`, revizi 4 a jeden záznam; `resume` načetl shodný další krok.
+Soukromý export `mza-badani-r4-2026-11-12.zip` obsahuje sedm datových souborů
+a má SHA-256
+`f5ace1408c1392fca6cfce7b4545ce388f9848bbfa1d3439544c08a17c53d5fa`.
+Přepis a obrazová data zůstávají mimo repozitář.
+
+První projektový milník je tím doložený od živého pramene přes strukturovaný
+výsledek až po navázání v nové konverzaci. Stav `reviewed` potvrzuje provedenou
+vizuální kontrolu, nikoli ztotožnění osoby nebo bezchybnou modernizaci jmen.
 
 ## Co ověřeno není
 
-- Čtení historického rukopisu a jeho paleografická správnost.
-- Uložení celé soukromé složky do trvalého úložiště a obnovení v nové uživatelské konverzaci.
+- Nezávislá druhá paleografická kontrola a modernizace historických příjmení.
 - Funkčnost na Windows/macOS či Pythonu 3.11; vyzkoušeno bylo uvedené linuxové prostředí.
-- GEDCOM, Gramps, automatické hledání, původní databázové schéma a web.
+- Import skutečného uživatelského GEDCOMu; automatické testy používají pouze
+  syntetická data. Dále nejsou ověřeny Gramps, automatické hledání, původní
+  databázové schéma ani web.
+- Obrazové deriváty `image_review.py` jsou automaticky ověřené na syntetických
+  obrázcích, ne na reprezentativním souboru různých skutečných archivních
+  formátů a kvalit.
 
-První projektový milník se skutečným pramenem proto zůstává otevřený.
+## Audit původního projektu 12. listopadu 2026
+
+Z GitHubu byla načtena přesná revize
+`0fb0c0379abf51a9af92d363992799fcd38eb23a`; při kontrole byla zároveň
+aktuálním `origin/HEAD` původního projektu. U všech 31 nástrojů v
+`skills/rodokmen/tools` byl porovnán deklarovaný účel, importy, externí
+závislosti, síťový přístup a vazba na datový model. Úplná rozhodnutí a SHA-256
+jsou v `docs/PORTING.md`.
+
+Do této verze byly přepsány pouze offline části, které lze bezpečně testovat na
+syntetických datech: kontrolní obrazové deriváty, fronta předků a audit kvality.
+Metodická pravidla byla zkráceně adaptována do samostatné reference. Síťové
+downloadery nebyly spuštěny ani převzaty; jejich historická přítomnost v
+upstreamu není důkazem dnešní dostupnosti či oprávnění portálu.
 
 ## Živé ověření Opavského archivu 11. listopadu 2026
 

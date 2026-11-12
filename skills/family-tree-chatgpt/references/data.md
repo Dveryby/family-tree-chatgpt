@@ -95,13 +95,33 @@ orientaci. Nástroj nezvětšuje, nedoostřuje a nepřepisuje existující výř
 Vrací JSON se souřadnicemi a součty; lze jej uložit do doplňkového pole `crop_metadata`.
 Pro čtení vždy skutečně prohlédnout obrázek.
 
+## Kontrolní obrázky
+
+Funkce adaptované z původních nástrojů `overit.py`, `ramecek.py` a místního
+režimu `mapa_knihy.py` jsou sloučené v jednom offline skriptu:
+
+```sh
+python scripts/image_review.py split /soukroma/sources/scan.png /soukroma/crops/left.png /soukroma/crops/right.png --box 0.1,0.2,0.9,0.6
+python scripts/image_review.py mark /soukroma/crops/record.png /soukroma/crops/record-marked.png --box 0.05,0.1,0.95,0.8
+python scripts/image_review.py sheet /soukroma/crops/book-map.png /soukroma/sources/scan-10.png /soukroma/sources/scan-20.png --box 0,0,1,0.15
+```
+
+`split` zachová překryv mezi částmi; `--contrast` vytvoří pracovní černobílou
+kopii. `mark` zakreslí jeden či více rámečků (`--box` lze opakovat). `sheet`
+slepí stejné oblasti již uložených snímků a nestahuje nic ze sítě. Vstupy musí
+být běžné soubory, výstupy nové soukromé PNG mimo Git. Skript vrací SHA-256 a
+původní soubory nemění.
+
 ## Kontrola a pokračování
 
 ```sh
 python scripts/research.py --workspace /soukroma resume
 python scripts/research.py --workspace /soukroma put /soukroma/zaznam.json --expected-revision 0 --next-step "Ověřit druhého stejnojmenného kandidáta."
 python scripts/research.py --workspace /soukroma check
+python scripts/research.py --workspace /soukroma audit
 python scripts/research.py --workspace /soukroma log --result not_found --scope "Konkrétní kniha, snímky 12–16, hledané jméno" --expected-revision 1 --next-step "Projít rejstřík sňatků."
 ```
 
 Revize jsou příklady, vždy načíst aktuální hodnotu.
+`check` blokuje poškozený nebo nedoložený stav. `audit` je pouze čtecí kontrola
+kvality: vypíše počty stavů a upozornění, která je nutné věcně posoudit.
