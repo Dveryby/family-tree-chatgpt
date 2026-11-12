@@ -31,7 +31,8 @@ description: >-
 2. U odkazu zjistit dostupné připojené nástroje. Pokud umožní potřebnou akci,
    použít je; pro interaktivní prohlížeč dodržet jeho aktuální instrukce.
    Nevymýšlet názvy nástrojů a nepředpokládat přítomnost Playwrightu.
-3. Pro Opavu přečíst [postup a omezení](references/opava.md). Zde není síťový stahovač.
+3. Pro Opavu přečíst [postup a omezení](references/opava.md), pro MZA
+   [samostatný postup](references/mza.md). Zde není síťový stahovač.
 4. Před čtením ověřit na stránce archiv, fond/sbírku, signaturu, obec/farnost,
    rozsah let, druh knihy, stranu a číslo snímku. Rozlišovat rok knihy a rok události.
 5. Zapsat citaci a přesný skutečně zjištěný odkaz. Chybějící údaj označit jako chybějící.

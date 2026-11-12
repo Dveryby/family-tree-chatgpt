@@ -1,7 +1,10 @@
 # Opava: postup pro první pilot
 
 Stav: postup převzatý a zúžený z upstream revize v `upstream.md`.
-Živý přístup z ChatGPT ani čtení skutečného zápisu zde dosud nejsou ověřené.
+Živý pilot z prohlížeče Codex 11. listopadu 2026 ověřil ruční průchod přes
+Radware hCaptcha, hledání, detail konkrétní knihy, jeden skutečný snímek,
+trvalé odkazy, citaci a výřez. CAPTCHA řešil uživatel; nebyla obcházena.
+Podrobnosti jsou v `../../../docs/VALIDATION.md`.
 
 Výchozí portál uváděný původním projektem: https://digi.archives.cz/da/.
 Adresu a podobu ověřit při použití. Tato verze neobsahuje downloader,

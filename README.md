@@ -4,7 +4,12 @@
 
 ## Stav
 
-První lokální prototyp, 10. listopadu 2026. Obsahuje převedený pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci pramenů s historií. Nejde o publikovaný plugin. Živý přístup k archivům, GEDCOM a přenos soukromého bádání přes trvalé úložiště do nové konverzace ještě nejsou ověřené.
+První lokální prototyp, aktualizovaný 12. listopadu 2026. Obsahuje převedený
+pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
+pramenů s historií. Živý přístup a práce s jedním snímkem byly ověřeny pro
+Zemský archiv v Opavě a MZA Brno; ochranné výzvy řešil ručně uživatel. Nejde o
+publikovaný plugin. GEDCOM ani přenos soukromého bádání přes trvalé úložiště do
+nové konverzace ještě nejsou ověřené.
 
 Zdroj postupu je ve [skills/family-tree-chatgpt](skills/family-tree-chatgpt). Přehled převodu a odložených nástrojů je v [docs/PORTING.md](docs/PORTING.md), výsledky ověření v [docs/VALIDATION.md](docs/VALIDATION.md).
 
@@ -26,7 +31,8 @@ Milník je splněný až po doloženém průchodu všemi kroky a ověření nav�
 - [x] Vytvořit katalog původních nástrojů, vybrat minimum a ověřit jeho závislosti a licenci.
 - [x] Převést základní pracovní postup pro ChatGPT a odstranit závislosti na Claude.
 - [x] Vybrat a lokálně otestovat minimum pro první zápis na syntetických datech.
-- [ ] Ověřit přístup k Opavskému archivu a práci se snímkem.
+- [x] Ověřit přístup k Opavskému archivu a práci se snímkem.
+- [x] Ověřit přístup k MZA a bezpečný výřez z browserového screenshotu.
 - [ ] Navrhnout a vyzkoušet trvalé ukládání rozpracovaného bádání.
 - [ ] Dokončit první ověřený průchod a kontrolu navázání.
 - [ ] Přidat import GEDCOM a plán dohledání dokladů.
