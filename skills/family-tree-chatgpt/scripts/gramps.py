@@ -15,9 +15,15 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 PLAN_SCHEMA_VERSION = 1
+TASK_PLAN_SCHEMA_VERSION = 1
 SUPPORTED_API_MAJOR = 3
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 MAX_OBJECTS = 5_000
+MAX_TASKS = 500
+MAX_TASK_TITLE_LENGTH = 500
+MAX_TASK_DESCRIPTION_LENGTH = 50_000
+TASK_PRIORITIES = {"high": "1", "medium": "5", "low": "9"}
+TASK_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 ENDPOINTS = {
     "Repository": "repositories",
     "Source": "sources",
@@ -143,9 +149,13 @@ class Client:
                 raise ValueError("Chybí přístupový token Gramps Web.")
             headers["Authorization"] = f"Bearer {self.token}"
         endpoint = path.strip("/")
+        route, separator, query = endpoint.partition("?")
         suffix = "/" if trailing_slash else ""
+        url = f"{self.base_url}/{route}{suffix}"
+        if separator:
+            url += f"?{query}"
         request = Request(
-            f"{self.base_url}/{endpoint}{suffix}", data=body, headers=headers, method=method
+            url, data=body, headers=headers, method=method
         )
         try:
             response = self.opener.open(request, timeout=self.timeout)
@@ -209,6 +219,20 @@ class Client:
         if payloads:
             self.request("POST", "objects", payloads, expected=(201,))
 
+    def list_tags(self):
+        result = self.request("GET", "tags?pagesize=500")
+        if not isinstance(result, list) or not all(isinstance(tag, dict) for tag in result):
+            raise ValueError("Gramps Web vrátilo neplatný seznam tagů.")
+        return result
+
+    def create_tag(self, handle, name):
+        if not isinstance(handle, str) or not handle or not isinstance(name, str) or not name:
+            raise ValueError("Nový Gramps tag musí mít handle a název.")
+        result = self.request(
+            "POST", "tags", {"handle": handle, "name": name}, expected=(201,)
+        )
+        return result
+
 
 def authenticate(client, username=None, password_env="GRAMPS_WEB_PASSWORD", token_env="GRAMPS_WEB_TOKEN"):
     token = os.environ.get(token_env, "") if token_env else ""
@@ -260,6 +284,159 @@ def probe(client):
             "multi_tree": bool(server.get("multi_tree", False)),
             "task_queue": bool(server.get("task_queue", False)),
         },
+    }
+
+
+def _todo_tags(tags):
+    return [tag for tag in tags if tag.get("name") == "ToDo"]
+
+
+def tasks_probe(client):
+    result = probe(client)
+    tags = client.list_tags()
+    matches = _todo_tags(tags)
+    if len(matches) == 0:
+        state = "missing"
+    elif len(matches) == 1 and isinstance(matches[0].get("handle"), str):
+        state = "ready"
+    else:
+        state = "ambiguous"
+    result["tasks"] = {
+        "supported": result["compatible"],
+        "todo_tag": {
+            "status": state,
+            "count": len(matches),
+            "handles": sorted(
+                tag["handle"] for tag in matches if isinstance(tag.get("handle"), str)
+            ),
+        },
+        "plan_ready": result["compatible"] and state != "ambiguous",
+    }
+    return result
+
+
+def validate_task_input(value):
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        raise ValueError("Vstup úkolů musí být objekt se schema_version 1.")
+    if set(value) != {"schema_version", "tasks"} or not isinstance(value["tasks"], list):
+        raise ValueError("Vstup úkolů smí obsahovat pouze schema_version a seznam tasks.")
+    if not value["tasks"]:
+        raise ValueError("Vstup úkolů nesmí být prázdný.")
+    if len(value["tasks"]) > MAX_TASKS:
+        raise ValueError(f"Jeden plán smí obsahovat nejvýše {MAX_TASKS} úkolů.")
+    normalized = []
+    identifiers = set()
+    allowed = {"id", "title", "description", "priority"}
+    for index, task in enumerate(value["tasks"], start=1):
+        if not isinstance(task, dict) or not set(task).issubset(allowed):
+            raise ValueError(f"Úkol {index} obsahuje neznámé pole nebo není objekt.")
+        identifier = task.get("id")
+        title = task.get("title")
+        description = task.get("description", "")
+        priority = task.get("priority", "medium")
+        if not isinstance(identifier, str) or not TASK_ID_PATTERN.fullmatch(identifier):
+            raise ValueError(
+                f"Úkol {index} musí mít stabilní id dlouhé 1–128 znaků bez mezer."
+            )
+        if identifier in identifiers:
+            raise ValueError(f"Duplicitní ID úkolu: {identifier}")
+        if not isinstance(title, str) or not title.strip():
+            raise ValueError(f"Úkol {identifier} musí mít neprázdný titul.")
+        title = title.strip()
+        if len(title) > MAX_TASK_TITLE_LENGTH:
+            raise ValueError(f"Titul úkolu {identifier} je příliš dlouhý.")
+        if not isinstance(description, str):
+            raise ValueError(f"Popis úkolu {identifier} musí být text.")
+        description = description.strip()
+        if len(description) > MAX_TASK_DESCRIPTION_LENGTH:
+            raise ValueError(f"Popis úkolu {identifier} je příliš dlouhý.")
+        if priority not in TASK_PRIORITIES:
+            raise ValueError(
+                f"Priorita úkolu {identifier} musí být high, medium nebo low."
+            )
+        identifiers.add(identifier)
+        normalized.append(
+            {
+                "id": identifier,
+                "title": title,
+                "description": description,
+                "priority": priority,
+            }
+        )
+    return {"schema_version": 1, "tasks": normalized}
+
+
+def build_task_objects(task_input, todo_handle):
+    task_input = validate_task_input(task_input)
+    if not isinstance(todo_handle, str) or not todo_handle:
+        raise ValueError("Pro Gramps úkoly chybí handle tagu ToDo.")
+    objects = []
+    for task in task_input["tasks"]:
+        local_key = f"task:{task['id']}"
+        source_handle = stable_handle("Source", local_key)
+        note_handle = stable_handle("Note", f"{local_key}:description")
+        note_list = [note_handle] if task["description"] else []
+        source = {
+            "_class": "Source",
+            "handle": source_handle,
+            "gramps_id": stable_gramps_id("Source", local_key),
+            "private": True,
+            "title": task["title"],
+            "author": "",
+            "abbrev": "Research task",
+            "pubinfo": "",
+            "attribute_list": [
+                marker(local_key),
+                {"_class": "SrcAttribute", "type": "Status", "value": "Open"},
+                {
+                    "_class": "SrcAttribute",
+                    "type": "Priority",
+                    "value": TASK_PRIORITIES[task["priority"]],
+                },
+            ],
+            "reporef_list": [],
+            "media_list": [],
+            "note_list": note_list,
+            "tag_list": [todo_handle],
+        }
+        objects.append(
+            {
+                "object_class": "Source",
+                "endpoint": ENDPOINTS["Source"],
+                "local_key": local_key,
+                "task_id": task["id"],
+                "payload": source,
+            }
+        )
+        if task["description"]:
+            note = {
+                "_class": "Note",
+                "handle": note_handle,
+                "gramps_id": stable_gramps_id("Note", f"{local_key}:description"),
+                "private": True,
+                "type": "To Do",
+                "text": {
+                    "_class": "StyledText",
+                    "string": task["description"],
+                    "tags": [],
+                },
+                "tag_list": [todo_handle],
+            }
+            objects.append(
+                {
+                    "object_class": "Note",
+                    "endpoint": ENDPOINTS["Note"],
+                    "local_key": f"{local_key}:description",
+                    "task_id": task["id"],
+                    "payload": note,
+                }
+            )
+    return {
+        "task_input": task_input,
+        "objects": sorted(
+            objects,
+            key=lambda item: (CLASS_ORDER[item["object_class"]], item["local_key"]),
+        ),
     }
 
 
@@ -701,6 +878,280 @@ def _matches(expected, actual):
             _matches(left, right) for left, right in zip(expected, actual)
         )
     return expected == actual
+
+
+def _task_object_matches(item, actual):
+    if not isinstance(actual, dict):
+        return False
+    payload = item["payload"]
+    if actual.get("private") is not True or actual.get("gramps_id") != payload["gramps_id"]:
+        return False
+    todo_handle = payload["tag_list"][0]
+    if todo_handle not in actual.get("tag_list", []):
+        return False
+    if item["object_class"] == "Note":
+        return actual.get("type") == "To Do"
+    expected_marker = next(
+        (
+            attribute
+            for attribute in payload["attribute_list"]
+            if attribute.get("type") == "FamilyTreeChatGPT ID"
+        ),
+        None,
+    )
+    actual_markers = [
+        attribute
+        for attribute in actual.get("attribute_list", [])
+        if attribute.get("type") == "FamilyTreeChatGPT ID"
+    ]
+    return any(_matches(expected_marker, marker_value) for marker_value in actual_markers) and set(
+        payload["note_list"]
+    ).issubset(actual.get("note_list", []))
+
+
+def _planned_todo_tag(client):
+    tags = client.list_tags()
+    matches = _todo_tags(tags)
+    if len(matches) > 1:
+        raise ValueError("Gramps strom obsahuje více tagů ToDo; nejprve je ručně sjednoť.")
+    if matches:
+        handle = matches[0].get("handle")
+        if not isinstance(handle, str) or not handle:
+            raise ValueError("Existující tag ToDo nemá platný handle.")
+        return {"name": "ToDo", "handle": handle, "action": "unchanged"}
+    handle = stable_handle("Tag", "todo")
+    collision = next((tag for tag in tags if tag.get("handle") == handle), None)
+    if collision is not None:
+        raise ValueError("Stabilní handle tagu ToDo koliduje s jiným tagem.")
+    return {"name": "ToDo", "handle": handle, "action": "create"}
+
+
+def make_task_plan(client, task_input):
+    normalized = validate_task_input(task_input)
+    metadata = client.metadata()
+    if not compatible(metadata):
+        raise ValueError(
+            f"Podporováno je Gramps Web API {SUPPORTED_API_MAJOR}.x; server hlásí {api_version(metadata) or 'neznámou verzi'}."
+        )
+    todo_tag = _planned_todo_tag(client)
+    built = build_task_objects(normalized, todo_tag["handle"])
+    entries = []
+    for item in built["objects"]:
+        existing = client.get_optional(item["object_class"], item["payload"]["handle"])
+        if existing is None:
+            action = "create"
+            remote_change = None
+        elif _task_object_matches(item, existing):
+            action = "unchanged"
+            remote_change = existing.get("change")
+        else:
+            action = "conflict"
+            remote_change = existing.get("change")
+        entries.append({**item, "action": action, "remote_change": remote_change})
+    database = metadata.get("database", {})
+    plan = {
+        "schema_version": TASK_PLAN_SCHEMA_VERSION,
+        "kind": "tasks",
+        "created_at": now(),
+        "base_url": client.base_url,
+        "api_version": api_version(metadata),
+        "database": {"id": database.get("id", ""), "name": database.get("name", "")},
+        "mode": "append_only",
+        "task_input_sha256": digest(normalized),
+        "task_ids": [task["id"] for task in normalized["tasks"]],
+        "todo_tag": todo_tag,
+        "objects": entries,
+    }
+    plan["plan_sha256"] = digest(plan)
+    return plan
+
+
+def validate_task_plan(plan):
+    if (
+        not isinstance(plan, dict)
+        or plan.get("schema_version") != TASK_PLAN_SCHEMA_VERSION
+        or plan.get("kind") != "tasks"
+    ):
+        raise ValueError("Nepodporovaný formát Gramps task plánu.")
+    saved = plan.get("plan_sha256")
+    unsigned = {key: value for key, value in plan.items() if key != "plan_sha256"}
+    if not isinstance(saved, str) or saved != digest(unsigned):
+        raise ValueError("Gramps task plán byl po vytvoření změněn nebo je poškozený.")
+    todo_tag = plan.get("todo_tag")
+    if (
+        plan.get("mode") != "append_only"
+        or not isinstance(plan.get("objects"), list)
+        or not isinstance(plan.get("task_ids"), list)
+        or not isinstance(todo_tag, dict)
+        or todo_tag.get("name") != "ToDo"
+        or not isinstance(todo_tag.get("handle"), str)
+        or not todo_tag["handle"]
+        or todo_tag.get("action") not in ("create", "unchanged")
+    ):
+        raise ValueError("Gramps task plán nemá bezpečný append-only formát.")
+    task_ids = plan["task_ids"]
+    if (
+        not task_ids
+        or len(set(task_ids)) != len(task_ids)
+        or not all(isinstance(value, str) and TASK_ID_PATTERN.fullmatch(value) for value in task_ids)
+        or not isinstance(plan.get("task_input_sha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", plan["task_input_sha256"])
+    ):
+        raise ValueError("Gramps task plán obsahuje neplatná ID nebo hash vstupu.")
+    seen_handles = set()
+    source_tasks = set()
+    note_tasks = set()
+    for item in plan["objects"]:
+        if (
+            not isinstance(item, dict)
+            or item.get("object_class") not in ("Source", "Note")
+            or item.get("action") not in ("create", "unchanged", "conflict")
+            or not isinstance(item.get("task_id"), str)
+            or item["task_id"] not in plan["task_ids"]
+            or not isinstance(item.get("payload"), dict)
+        ):
+            raise ValueError("Gramps task plán obsahuje neplatnou operaci.")
+        payload = item["payload"]
+        local_key = f"task:{item['task_id']}"
+        expected_local_key = (
+            local_key if item["object_class"] == "Source" else f"{local_key}:description"
+        )
+        if (
+            payload.get("_class") != item["object_class"]
+            or payload.get("private") is not True
+            or todo_tag["handle"] not in payload.get("tag_list", [])
+            or item.get("local_key") != expected_local_key
+            or payload.get("handle") != stable_handle(item["object_class"], expected_local_key)
+            or payload.get("gramps_id")
+            != stable_gramps_id(item["object_class"], expected_local_key)
+            or payload["handle"] in seen_handles
+        ):
+            raise ValueError("Gramps task plán obsahuje neplatný nebo nestabilní objekt.")
+        seen_handles.add(payload["handle"])
+        if item["object_class"] == "Source":
+            source_tasks.add(item["task_id"])
+            expected_marker = marker(local_key)
+            if not any(
+                _matches(expected_marker, attribute)
+                for attribute in payload.get("attribute_list", [])
+            ):
+                raise ValueError("Zdroj Gramps úkolu postrádá stabilní lokální ID.")
+        else:
+            note_tasks.add(item["task_id"])
+            if payload.get("type") != "To Do":
+                raise ValueError("Poznámka Gramps úkolu musí mít typ To Do.")
+    if source_tasks != set(task_ids) or not note_tasks.issubset(source_tasks):
+        raise ValueError("Gramps task plán nemá právě jeden zdroj pro každý úkol.")
+    for item in plan["objects"]:
+        if item["object_class"] != "Source":
+            continue
+        expected_notes = (
+            [stable_handle("Note", f"task:{item['task_id']}:description")]
+            if item["task_id"] in note_tasks
+            else []
+        )
+        if item["payload"].get("note_list") != expected_notes:
+            raise ValueError("Zdroj Gramps úkolu má neplatnou vazbu na poznámku.")
+    return plan
+
+
+def task_plan_summary(plan, output=None):
+    validate_task_plan(plan)
+    counts = {name: 0 for name in ("create", "unchanged", "conflict")}
+    for item in plan["objects"]:
+        counts[item["action"]] += 1
+    result = {
+        "planned": True,
+        "kind": "tasks",
+        "plan_sha256": plan["plan_sha256"],
+        "base_url": plan["base_url"],
+        "database": plan["database"],
+        "mode": plan["mode"],
+        "tasks": len(plan["task_ids"]),
+        "todo_tag": plan["todo_tag"],
+        "actions": counts,
+    }
+    if output is not None:
+        result["output"] = str(output)
+    return result
+
+
+def _ensure_todo_tag(client, planned):
+    tags = client.list_tags()
+    matches = _todo_tags(tags)
+    exact = next((tag for tag in tags if tag.get("handle") == planned["handle"]), None)
+    if len(matches) > 1:
+        raise ValueError("Gramps strom obsahuje více tagů ToDo; push je odmítnut.")
+    if matches:
+        if matches[0].get("handle") != planned["handle"]:
+            raise ValueError("Tag ToDo se od vytvoření plánu změnil; vytvoř nový plán.")
+        return False
+    if exact is not None:
+        raise ValueError("Handle plánovaného tagu ToDo koliduje s jiným tagem.")
+    if planned["action"] != "create":
+        raise ValueError("Tag ToDo od vytvoření plánu zmizel; vytvoř nový plán.")
+    client.create_tag(planned["handle"], "ToDo")
+    created = [
+        tag
+        for tag in client.list_tags()
+        if tag.get("name") == "ToDo" and tag.get("handle") == planned["handle"]
+    ]
+    if len(created) != 1:
+        raise ValueError("Vytvořený tag ToDo se nepodařilo zpětně ověřit.")
+    return True
+
+
+def push_task_plan(client, plan):
+    validate_task_plan(plan)
+    if plan["base_url"] != client.base_url:
+        raise ValueError("URL serveru se neshoduje s uloženým Gramps task plánem.")
+    metadata = client.metadata()
+    database = metadata.get("database", {})
+    if (
+        database.get("id", "") != plan["database"].get("id", "")
+        or database.get("name", "") != plan["database"].get("name", "")
+    ):
+        raise ValueError("Aktivní Gramps strom se neshoduje s task plánem.")
+    conflicts = [item for item in plan["objects"] if item["action"] == "conflict"]
+    if conflicts:
+        raise ValueError("Gramps task plán obsahuje kolize; push je odmítnut.")
+    tag_created = _ensure_todo_tag(client, plan["todo_tag"])
+    creates = []
+    already_present = 0
+    for item in plan["objects"]:
+        remote = client.get_optional(item["object_class"], item["payload"]["handle"])
+        if item["action"] == "unchanged":
+            if remote is None or not _task_object_matches(item, remote):
+                raise ValueError("Gramps úkol se od vytvoření plánu změnil; vytvoř nový plán.")
+            already_present += 1
+        elif remote is None:
+            creates.append(item)
+        elif _task_object_matches(item, remote):
+            already_present += 1
+        else:
+            raise ValueError("Stabilní handle Gramps úkolu koliduje s jiným objektem.")
+    client.create_objects([item["payload"] for item in creates])
+    missing = []
+    for item in plan["objects"]:
+        remote = client.get_optional(item["object_class"], item["payload"]["handle"])
+        if remote is None or not _task_object_matches(item, remote):
+            missing.append(item["local_key"])
+    if missing:
+        raise ValueError(
+            "Zápis úkolů skončil bez úplného ověření objektů: " + ", ".join(missing[:10])
+        )
+    return {
+        "pushed": True,
+        "kind": "tasks",
+        "mode": "append_only",
+        "tag_created": tag_created,
+        "created": len(creates),
+        "already_present": already_present,
+        "verified": len(plan["objects"]),
+        "tasks": len(plan["task_ids"]),
+        "plan_sha256": plan["plan_sha256"],
+        "database": plan["database"],
+    }
 
 
 def make_plan(client, state, research_sha256):

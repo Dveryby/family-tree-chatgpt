@@ -2,11 +2,11 @@
 
 Český genealogický asistent pro ChatGPT. Projekt připravuje převod postupů a nástrojů z [sarsonj/rodokmen-skill](https://github.com/sarsonj/rodokmen-skill) do prostředí ChatGPT.
 
-Aktuální verze: **0.4.0** (13. listopadu 2026).
+Aktuální verze: **0.4.5** (13. listopadu 2026).
 
 ## Stav
 
-Minor verze 0.4.0, vydaná 13. listopadu 2026. Obsahuje převedený
+Verze 0.4.5, vydaná 13. listopadu 2026. Obsahuje převedený
 pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
 pramenů s historií. Ověřen je lokální export a obnova úplného stavu přes ZIP
 s kontrolními součty. Živý přístup a práce s jedním snímkem byly ověřeny pro
@@ -50,6 +50,15 @@ projektu.
 - přenosný Agent Plugins 1.0 manifest, kompatibilní manifest pro Codex a
   repozitářový marketplace pro instalaci v ChatGPT desktop,
 - automatická kontrola shody vydané verze, obou manifestů a marketplace.
+
+## Novinky ve verzi 0.4.5
+
+- samostatný append-only tok `gramps tasks probe/plan/push` pro standardní
+  soukromé úkoly na obrazovce Tasks v Gramps Web,
+- explicitní vstupní JSON úkolů, stabilní identifikátory a automatické
+  zajištění tagu `ToDo`,
+- opakovaný push bez duplicit a bez přepisování stavu, priority, titulu nebo
+  popisu, které uživatel následně upravil v Gramps Web.
 
 ## Novinky ve verzi 0.3.0
 
@@ -146,6 +155,9 @@ python3 skills/family-tree-chatgpt/scripts/family_tree.py gedcom import /soukrom
 python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps probe --url https://rodokmen.example.cz --username editor
 python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani gramps plan /soukrome-uloziste/gramps-plan.json --url https://rodokmen.example.cz --username editor
 python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /cesta/mimo/repozitar/soukrome-badani gramps push /soukrome-uloziste/gramps-plan.json --url https://rodokmen.example.cz --username editor
+python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps tasks probe --url https://rodokmen.example.cz --username editor
+python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps tasks plan /soukrome-uloziste/ukoly.json /soukrome-uloziste/gramps-task-plan.json --url https://rodokmen.example.cz --username editor
+python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps tasks push /soukrome-uloziste/gramps-task-plan.json --url https://rodokmen.example.cz --username editor
 python3 skills/family-tree-chatgpt/scripts/family_tree.py image split /soukrome-uloziste/snimky/scan.png /soukrome-uloziste/snimky/left.png /soukrome-uloziste/snimky/right.png
 ```
 

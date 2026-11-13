@@ -1,8 +1,18 @@
-# Ověření verze 0.4.0
+# Ověření verze 0.4.5
 
 Datum: 10.–13. listopadu 2026. První průchod: Linux, Python 3.12.14,
-Pillow 13.0.0. Rozšířená sada 54 testů byla znovu spuštěna na Pythonu 3.13.5
-s Pillow 11.1.0; šest testů ověřuje Gramps adaptér a čtyři balení pluginu.
+Pillow 13.0.0. Rozšířená sada 56 testů byla znovu spuštěna na Pythonu 3.13.5
+s Pillow 11.1.0; osm testů ověřuje Gramps adaptér a čtyři balení pluginu.
+
+## Gramps Tasks ve verzi 0.4.5
+
+Dne 13. listopadu 2026 přibyly příkazy `gramps tasks probe/plan/push`.
+Rozšířená sada **56 testů prošla**. Dva nové syntetické testy ověřují vytvoření
+tagu `ToDo`, standardních soukromých objektů `Source` a `Note`, stabilní
+identifikátory, opakovaný push bez duplicit, zachování uživatelsky změněného
+stavu, priority, titulu a popisu a odmítnutí duplicitních tagů i kolize objektu.
+HTTP test navíc kontroluje přesné cesty `/api/tags/`, dotaz na seznam tagů a
+serializaci vytvoření tagu. Do skutečného Gramps stromu úkol zapsán nebyl.
 
 ## Automatické testy
 
@@ -12,7 +22,7 @@ Příkaz z kořene repozitáře:
 python3 -m unittest discover -s tests -v
 ```
 
-Výsledek: **54 testů prošlo**.
+Výsledek: **56 testů prošlo**.
 
 - Přesné pixely a velikost výřezu; zachování originálu; EXIF orientace.
 - Odmítnutí chybných či prázdných souřadnic a přepsání výstupu/originálu.
@@ -63,13 +73,19 @@ Výsledek: **54 testů prošlo**.
 - Příkazy `gramps probe`, `plan`, `push` a `status` nad in-memory náhradou API:
   oprávnění `0600` plánu, opakovaný stav `synchronized`, kontrola hashů,
   odmítnutí kolize, změněného plánu a nešifrovaného HTTP.
+- Příkazy `gramps tasks probe`, `plan` a `push`: tag `ToDo`, soukromé úkoly,
+  stabilní handles, idempotentní opakování a zachování uživatelských změn.
 - Plugin: přenosný manifest Agent Plugins 1.0, kompatibilní manifest pro Codex,
-  shoda verze `0.4.0`, metadata rozhraní a repozitářový marketplace ukazující
+  shoda verze `0.4.5`, metadata rozhraní a repozitářový marketplace ukazující
   na kořen balíčku.
 
 Strukturální validace balíčku proběhla nástrojem `quick_validate.py` bez chyb.
 
 ## Instalace pluginu v ChatGPT desktop 13. listopadu 2026
+
+Níže uvedené praktické ověření instalace proběhlo s verzí 0.4.0. Balení 0.4.5
+je ověřeno automatickými testy; nová instalace do desktopové cache zde
+provedena nebyla.
 
 Repozitář byl ověřen jako skills-only plugin dvěma nezávislými validátory:
 

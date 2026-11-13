@@ -68,6 +68,58 @@ Protože vzdálené vytvoření nelze lokálně vrátit, při síťové chybě v
 `synchronized` shodu spravovaných polí a `conflict` kolizi vyžadující ruční
 posouzení.
 
+## Badatelské úkoly v Gramps Web
+
+Úkoly používají samostatný tok a nevstupují do exportu podporovaných tvrzení.
+Gramps Web reprezentuje úkol jako soukromý `Source` s tagem `ToDo`, atributy
+`Status` a `Priority` a volitelnou připojenou `Note` typu `To Do`.
+
+Nejprve bez zápisu ověř API a tag `ToDo`:
+
+```sh
+python3 scripts/family_tree.py gramps tasks probe \
+  --url https://rodokmen.example.cz --username editor
+```
+
+Vstupní soubor mimo Git má tento formát:
+
+```json
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "missing-marriage:person-P004",
+      "title": "Dohledat sňatek Jana Nováka",
+      "description": "Prohledat matriku oddaných 1800–1812.",
+      "priority": "high"
+    }
+  ]
+}
+```
+
+`id` je stabilní technický identifikátor dlouhý nejvýše 128 znaků bez mezer.
+Priorita je `high`, `medium` nebo `low`; výchozí hodnota je `medium`. Nový úkol
+vždy vzniká se stavem `Open` a jako soukromý. JSON může obsahovat nejvýše 500
+úkolů a nesmí obsahovat jiná pole.
+
+```sh
+python3 scripts/family_tree.py gramps tasks plan \
+  /soukrome/ukoly.json /soukrome/gramps-task-plan.json \
+  --url https://rodokmen.example.cz --username editor
+
+python3 scripts/family_tree.py gramps tasks push \
+  /soukrome/gramps-task-plan.json \
+  --url https://rodokmen.example.cz --username editor
+```
+
+`plan` podle potřeby naplánuje vytvoření stabilního tagu `ToDo` a pro každý
+úkol objekt `Source` plus poznámku, pokud má neprázdný popis. `push` ověří
+server, strom, hash plánu, tag i všechny stabilní handles. Zápis je idempotentní:
+již přítomné shodné objekty přeskočí a kolizi odmítne. Po vytvoření může
+uživatel v Gramps Web změnit stav, prioritu, titul i popis; další plán je
+nepřepisuje. Plugin nevytváří úkoly automaticky z `research.json` a neuzavírá
+je při vyřešení problému.
+
 ## Co se přenáší
 
 Do exportu vstoupí pouze tvrzení se stavem `supported`. Tvrzení v otevřeném

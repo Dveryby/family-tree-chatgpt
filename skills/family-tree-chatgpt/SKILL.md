@@ -161,6 +161,15 @@ Při výslovném požadavku na Gramps přečíst [referenci Gramps](references/g
 7. Soubory pramenů, neověřená tvrzení, zamítnuté varianty a úplná struktura
    konfliktů zůstávají v soukromém badatelském stavu.
 
+Při výslovném požadavku publikovat badatelské úkoly používat oddělený tok
+`gramps tasks probe/plan/push`. Vstupní JSON i plán uchovat mimo Git. Úkol není
+genealogické tvrzení: v Gramps Web vzniká jako soukromý `Source` s tagem
+`ToDo`, atributy `Status` a `Priority` a volitelnou poznámkou `To Do`.
+Před zápisem zkontrolovat plán a kolize. Stabilní ID brání duplicitám; existující
+stav, prioritu, titul ani text úkolu adaptér nepřepisuje. Automatické odvození
+úkolů z badatelského stavu není součástí tohoto toku, vstup musí obsahovat
+explicitně zkontrolovaný seznam.
+
 ## Respektovat archiv a rozsah
 
 - Na jednom archivu pracovat postupně a bez souběžného listování. Použít uložené snímky.

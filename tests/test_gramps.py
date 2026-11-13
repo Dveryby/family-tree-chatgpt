@@ -94,10 +94,31 @@ def model_patch():
     }
 
 
+def task_input():
+    return {
+        "schema_version": 1,
+        "tasks": [
+            {
+                "id": "missing-marriage:parent",
+                "title": "Find the synthetic marriage",
+                "description": "Search the synthetic marriage register from 1890 to 1900.",
+                "priority": "high",
+            },
+            {
+                "id": "review-reading:child",
+                "title": "Review an uncertain synthetic reading",
+                "description": "",
+                "priority": "medium",
+            },
+        ],
+    }
+
+
 class FakeClient:
     def __init__(self):
         self.base_url = "https://gramps.example/api"
         self.objects = {}
+        self.tags = []
         self._metadata = {
             "database": {"id": "synthetic-tree", "name": "Synthetic Tree", "schema": "21.0.0"},
             "gramps": {"version": "6.0.0"},
@@ -119,6 +140,15 @@ class FakeClient:
             value.pop("_class", None)
             value["change"] = 1
             self.objects[(payload["_class"], payload["handle"])] = value
+
+    def list_tags(self):
+        return json.loads(json.dumps(self.tags))
+
+    def create_tag(self, handle, name):
+        if any(tag.get("handle") == handle for tag in self.tags):
+            raise ValueError("tag collision")
+        self.tags.append({"handle": handle, "name": name})
+        return {"handle": handle, "name": name}
 
 
 class GrampsIntegrationTests(unittest.TestCase):
@@ -187,6 +217,137 @@ class GrampsIntegrationTests(unittest.TestCase):
         ])
         self.assertEqual(current["status"], "synchronized")
         self.assertEqual(current["actions"]["create"], 0)
+
+    def test_task_probe_plan_push_is_idempotent_and_preserves_user_fields(self):
+        task_path = Path(self.temp.name) / "tasks.json"
+        task_path.write_text(json.dumps(task_input()), encoding="utf-8")
+
+        probed = self.execute(
+            ["gramps", "tasks", "probe", "--url", "https://gramps.example"],
+            workspace=False,
+        )
+        self.assertEqual(probed["tasks"]["todo_tag"]["status"], "missing")
+        self.assertTrue(probed["tasks"]["plan_ready"])
+
+        plan_path = Path(self.temp.name) / "task-plan.json"
+        planned = self.execute(
+            [
+                "gramps",
+                "tasks",
+                "plan",
+                str(task_path),
+                str(plan_path),
+                "--url",
+                "https://gramps.example",
+            ],
+            workspace=False,
+        )
+        self.assertEqual(planned["tasks"], 2)
+        self.assertEqual(planned["todo_tag"]["action"], "create")
+        self.assertEqual(planned["actions"]["create"], 3)
+        self.assertEqual(stat.S_IMODE(plan_path.stat().st_mode), 0o600)
+
+        pushed = self.execute(
+            [
+                "gramps",
+                "tasks",
+                "push",
+                str(plan_path),
+                "--url",
+                "https://gramps.example",
+            ],
+            workspace=False,
+        )
+        self.assertTrue(pushed["tag_created"])
+        self.assertEqual(pushed["created"], 3)
+        self.assertEqual(pushed["verified"], 3)
+        self.assertEqual(len(self.client.tags), 1)
+
+        source_key = next(key for key in self.client.objects if key[0] == "Source")
+        source = self.client.objects[source_key]
+        source["title"] = "User-edited title"
+        for attribute in source["attribute_list"]:
+            if attribute.get("type") == "Status":
+                attribute["value"] = "Done"
+            if attribute.get("type") == "Priority":
+                attribute["value"] = "9"
+        note_key = next(key for key in self.client.objects if key[0] == "Note")
+        self.client.objects[note_key]["text"]["string"] = "User progress note"
+
+        second_plan_path = Path(self.temp.name) / "task-plan-second.json"
+        second = self.execute(
+            [
+                "gramps",
+                "tasks",
+                "plan",
+                str(task_path),
+                str(second_plan_path),
+                "--url",
+                "https://gramps.example",
+            ],
+            workspace=False,
+        )
+        self.assertEqual(second["todo_tag"]["action"], "unchanged")
+        self.assertEqual(second["actions"], {"create": 0, "unchanged": 3, "conflict": 0})
+        repeated = self.execute(
+            [
+                "gramps",
+                "tasks",
+                "push",
+                str(second_plan_path),
+                "--url",
+                "https://gramps.example",
+            ],
+            workspace=False,
+        )
+        self.assertEqual(repeated["created"], 0)
+        self.assertEqual(repeated["already_present"], 3)
+        self.assertEqual(source["title"], "User-edited title")
+
+    def test_task_input_tag_ambiguity_and_object_collision_fail_closed(self):
+        invalid = task_input()
+        invalid["tasks"].append(dict(invalid["tasks"][0]))
+        with self.assertRaisesRegex(ValueError, "Duplicitní ID"):
+            gramps.validate_task_input(invalid)
+
+        self.client.tags = [
+            {"handle": "todo-one", "name": "ToDo"},
+            {"handle": "todo-two", "name": "ToDo"},
+        ]
+        self.assertEqual(gramps.tasks_probe(self.client)["tasks"]["todo_tag"]["status"], "ambiguous")
+        with self.assertRaisesRegex(ValueError, "více tagů ToDo"):
+            gramps.make_task_plan(self.client, task_input())
+
+        self.client.tags = [{"handle": "todo-one", "name": "ToDo"}]
+        plan = gramps.make_task_plan(self.client, task_input())
+        tampered = json.loads(json.dumps(plan))
+        tampered["objects"][0]["payload"]["handle"] = "f" * 32
+        tampered["plan_sha256"] = gramps.digest(
+            {key: value for key, value in tampered.items() if key != "plan_sha256"}
+        )
+        with self.assertRaisesRegex(ValueError, "nestabilní"):
+            gramps.validate_task_plan(tampered)
+
+        first = next(item for item in plan["objects"] if item["object_class"] == "Source")
+        self.client.objects[("Source", first["payload"]["handle"])] = {
+            "handle": first["payload"]["handle"],
+            "gramps_id": "UNRELATED",
+            "private": True,
+            "tag_list": ["todo-one"],
+            "attribute_list": [],
+            "note_list": [],
+        }
+        conflicted = gramps.make_task_plan(self.client, task_input())
+        self.assertEqual(
+            next(
+                item
+                for item in conflicted["objects"]
+                if item["local_key"] == first["local_key"]
+            )["action"],
+            "conflict",
+        )
+        with self.assertRaisesRegex(ValueError, "kolize"):
+            gramps.push_task_plan(self.client, conflicted)
 
     def test_conflict_and_changed_plan_are_rejected_without_writes(self):
         state = research.read_state(self.root)
@@ -262,10 +423,9 @@ class GrampsIntegrationTests(unittest.TestCase):
 
     def test_http_client_serializes_login_and_bearer_request(self):
         class Response:
-            status = 200
-
-            def __init__(self, value):
+            def __init__(self, value, status=200):
                 self.body = json.dumps(value).encode("utf-8")
+                self.status = status
 
             def read(self, limit):
                 return self.body[:limit]
@@ -277,6 +437,8 @@ class GrampsIntegrationTests(unittest.TestCase):
                     Response({"access_token": "access", "refresh_token": "refresh"}),
                     Response(self_metadata),
                     Response({"handle": "person-handle", "private": True}),
+                    Response([]),
+                    Response({"handle": "todo", "name": "ToDo"}, status=201),
                 ]
 
             def open(self, request, timeout):
@@ -292,9 +454,16 @@ class GrampsIntegrationTests(unittest.TestCase):
         self.assertTrue(gramps.probe(client)["compatible"])
         self.assertEqual(opener.requests[1].get_header("Authorization"), "Bearer access")
         self.assertEqual(client.get_optional("Person", "person-handle")["handle"], "person-handle")
+        self.assertEqual(client.list_tags(), [])
+        self.assertEqual(client.create_tag("todo", "ToDo")["name"], "ToDo")
         self.assertTrue(opener.requests[0].full_url.endswith("/token/"))
         self.assertTrue(opener.requests[1].full_url.endswith("/metadata/"))
         self.assertTrue(opener.requests[2].full_url.endswith("/people/person-handle"))
+        self.assertTrue(opener.requests[3].full_url.endswith("/tags/?pagesize=500"))
+        self.assertTrue(opener.requests[4].full_url.endswith("/tags/"))
+        self.assertEqual(
+            json.loads(opener.requests[4].data), {"handle": "todo", "name": "ToDo"}
+        )
 
 
 if __name__ == "__main__":

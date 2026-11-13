@@ -135,7 +135,22 @@ def gramps_client(args):
     return client
 
 
+def gramps_tasks_command(args):
+    client = gramps_client(args)
+    if args.tasks_command == "probe":
+        return gramps.tasks_probe(client)
+    if args.tasks_command == "push":
+        plan = gramps.validate_task_plan(private_json(args.plan_json))
+        return gramps.push_task_plan(client, plan)
+    task_input = gramps.validate_task_input(private_json(args.tasks_json))
+    plan = gramps.make_task_plan(client, task_input)
+    output = gramps.write_plan(args.output, plan, research.in_git_tree)
+    return gramps.task_plan_summary(plan, output)
+
+
 def gramps_command(args):
+    if args.gramps_command == "tasks":
+        return gramps_tasks_command(args)
     client = gramps_client(args)
     if args.gramps_command == "probe":
         return gramps.probe(client)
@@ -293,6 +308,26 @@ def build_parser():
     add_gramps_connection(push)
     status = gramps_commands.add_parser("status", help="porovnat podporovaná tvrzení se serverem")
     add_gramps_connection(status)
+
+    tasks = gramps_commands.add_parser(
+        "tasks", help="vytvářet standardní soukromé úkoly Gramps Web"
+    )
+    task_commands = tasks.add_subparsers(dest="tasks_command", required=True)
+    task_probe = task_commands.add_parser(
+        "probe", help="ověřit podporu úkolů a stav tagu ToDo bez zápisu"
+    )
+    add_gramps_connection(task_probe)
+    task_plan = task_commands.add_parser(
+        "plan", help="připravit append-only plán z explicitního JSON seznamu úkolů"
+    )
+    task_plan.add_argument("tasks_json", type=Path)
+    task_plan.add_argument("output", type=Path)
+    add_gramps_connection(task_plan)
+    task_push = task_commands.add_parser(
+        "push", help="vytvořit úkoly podle nezměněného soukromého plánu"
+    )
+    task_push.add_argument("plan_json", type=Path)
+    add_gramps_connection(task_push)
 
     gedcom_parser = commands.add_parser("gedcom", help="bezpečný offline import GEDCOM tvrzení")
     gedcom_commands = gedcom_parser.add_subparsers(dest="gedcom_command", required=True)
