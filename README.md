@@ -2,16 +2,18 @@
 
 Český genealogický asistent pro ChatGPT. Projekt připravuje převod postupů a nástrojů z [sarsonj/rodokmen-skill](https://github.com/sarsonj/rodokmen-skill) do prostředí ChatGPT.
 
-Aktuální verze: **0.3.0** (12. listopadu 2026).
+Aktuální verze: **0.4.0** (13. listopadu 2026).
 
 ## Stav
 
-Minor verze 0.3.0, vydaná 12. listopadu 2026. Obsahuje převedený
+Minor verze 0.4.0, vydaná 13. listopadu 2026. Obsahuje převedený
 pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
 pramenů s historií. Ověřen je lokální export a obnova úplného stavu přes ZIP
 s kontrolními součty. Živý přístup a práce s jedním snímkem byly ověřeny pro
 Zemský archiv v Opavě a MZA Brno; ochranné výzvy řešil ručně uživatel. Nejde o
-publikovaný plugin. Přenos přes trvalé soukromé úložiště do nové konverzace je
+plugin zveřejněný ve veřejném katalogu; repozitář je ale zabalený jako lokální
+skills-only plugin pro ChatGPT desktop a Codex. Přenos přes trvalé soukromé
+úložiště do nové konverzace je
 ověřený včetně pokračování další revizí. První skutečný zápis MZA prošel
 vizuální kontrolou, přepisem, překladem a oddělenou interpretací. Implementovaný
 je také bezpečný offline import GEDCOM tvrzení, plán chybějících dokladů,
@@ -22,7 +24,7 @@ jsou dostupné přes jedno stabilní příkazové rozhraní.
 Všech 31 nástrojů původního projektu bylo funkčně roztříděno; užitečné offline
 postupy byly adaptovány, zatímco síťové archivní a webové nástroje zůstávají
 odložené do samostatného ověření.
-Ve vývoji po vydání 0.3.0 přibyl bezpečný jednosměrný adaptér pro Gramps Web
+Ve verzi 0.4.0 přibyl bezpečný jednosměrný adaptér pro Gramps Web
 API 3.x s příkazy `probe`, `plan`, `push` a `status`. Je ověřen jednotkovými
 testy i úplným syntetickým průchodem proti dočasnému oficiálnímu Gramps Web
 API 3.25.2 / Gramps 6.0.8; skutečná rodinná data použita nebyla.
@@ -37,6 +39,18 @@ přepis a posouzení totožnosti až po bezpečné uložení a pokračování. K
 osoby z pilotních zápisů jsou testovací případy nástroje, nikoli výzkumný cíl
 projektu.
 
+## Novinky ve verzi 0.4.0
+
+- append-only propojení s Gramps Web API 3.x bez přímého zápisu do databáze,
+- export pouze podporovaných tvrzení mimo otevřené konflikty,
+- mapování osob, jmen, vybraných událostí, rodičovské vazby, pramenů, citací a
+  výzkumných poznámek,
+- soukromý plán opatřený SHA-256 s kontrolou serveru, stromu, revize a stavu,
+- odmítnutí mazání, vzdálených aktualizací, kolizí a nešifrovaného připojení,
+- přenosný Agent Plugins 1.0 manifest, kompatibilní manifest pro Codex a
+  repozitářový marketplace pro instalaci v ChatGPT desktop,
+- automatická kontrola shody vydané verze, obou manifestů a marketplace.
+
 ## Novinky ve verzi 0.3.0
 
 - obecný model osob, vztahů, tvrzení, pramenů a explicitních konfliktů,
@@ -45,15 +59,6 @@ projektu.
 - výslovná migrace formátu 1 při zachování historie a kompatibility exportu,
 - jednotné CLI `family_tree.py` pro projekt, zápisy, model, GEDCOM a obrázky,
 - rozšířená sada 44 syntetických testů.
-
-## Vývoj po verzi 0.3.0
-
-- append-only propojení s Gramps Web API 3.x bez přímého zápisu do databáze,
-- export pouze podporovaných tvrzení mimo otevřené konflikty,
-- mapování osob, jmen, vybraných událostí, rodičovské vazby, pramenů, citací a
-  výzkumných poznámek,
-- soukromý plán opatřený SHA-256 s kontrolou serveru, stromu, revize a stavu,
-- odmítnutí mazání, vzdálených aktualizací, kolizí a nešifrovaného připojení.
 
 ## Novinky ve verzi 0.2.0
 
@@ -110,6 +115,23 @@ Vyžaduje Python 3.11+ a pro obrazové nástroje Pillow. Testováno na kombinac�
 Python 3.12.14 / Pillow 13.0.0 a Python 3.13.5 / Pillow 11.1.0. Projektové,
 modelové, GEDCOM a Gramps příkazy používají pouze standardní knihovnu Pythonu;
 Pillow se načítá až pro obrazové příkazy.
+
+### Instalace pluginu v ChatGPT desktop
+
+Z kořene repozitáře přidej místní marketplace a nainstaluj plugin:
+
+```sh
+codex plugin marketplace add .
+codex plugin add family-tree-chatgpt@family-tree-chatgpt
+```
+
+Příkazy vyžadují Codex CLI dostupné v `PATH`; stejnou instalaci lze provést
+také přes správu pluginů v ChatGPT desktop.
+Potom restartuj ChatGPT desktop a otevři novou konverzaci. Marketplace načítá
+plugin přímo z kořene repozitáře; soukromá badatelská data zůstávají mimo Git.
+Po změně zdrojů spusť znovu instalaci pluginu a ověř novou konverzaci.
+
+### Přímé spuštění CLI
 
 ```sh
 python3 -m pip install -r requirements.txt

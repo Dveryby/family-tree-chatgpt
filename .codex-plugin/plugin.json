@@ -1,0 +1,36 @@
+{
+  "name": "family-tree-chatgpt",
+  "version": "0.4.0",
+  "description": "Soukromí respektující nástroj pro dohledatelný genealogický výzkum v češtině.",
+  "author": {
+    "name": "Dveryby",
+    "url": "https://github.com/Dveryby"
+  },
+  "homepage": "https://github.com/Dveryby/family-tree-chatgpt",
+  "repository": "https://github.com/Dveryby/family-tree-chatgpt",
+  "license": "MIT",
+  "keywords": [
+    "genealogy",
+    "research",
+    "gedcom",
+    "gramps"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Family Tree for ChatGPT",
+    "shortDescription": "Genealogický výzkum",
+    "longDescription": "Dohledatelný genealogický výzkum s odděleným přepisem, interpretací, tvrzeními, prameny a konflikty.",
+    "developerName": "Dveryby",
+    "category": "Education & Research",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/Dveryby/family-tree-chatgpt",
+    "defaultPrompt": [
+      "Založ nový genealogický výzkum s dohledatelnými prameny.",
+      "Obnov badatelský stav a navrhni další ověřitelný krok.",
+      "Připrav bezpečný plán exportu do Gramps Web."
+    ]
+  }
+}

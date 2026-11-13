@@ -1,8 +1,8 @@
-# Ověření verze 0.3.0
+# Ověření verze 0.4.0
 
-Datum: 10.–12. listopadu 2026. První průchod: Linux, Python 3.12.14,
-Pillow 13.0.0. Rozšířená sada 50 testů byla znovu spuštěna na Pythonu 3.13.5
-s Pillow 11.1.0; šest nových testů po vydání 0.3.0 ověřuje Gramps adaptér.
+Datum: 10.–13. listopadu 2026. První průchod: Linux, Python 3.12.14,
+Pillow 13.0.0. Rozšířená sada 54 testů byla znovu spuštěna na Pythonu 3.13.5
+s Pillow 11.1.0; šest testů ověřuje Gramps adaptér a čtyři balení pluginu.
 
 ## Automatické testy
 
@@ -12,7 +12,7 @@ Příkaz z kořene repozitáře:
 python3 -m unittest discover -s tests -v
 ```
 
-Výsledek: **50 testů prošlo**.
+Výsledek: **54 testů prošlo**.
 
 - Přesné pixely a velikost výřezu; zachování originálu; EXIF orientace.
 - Odmítnutí chybných či prázdných souřadnic a přepsání výstupu/originálu.
@@ -63,8 +63,32 @@ Výsledek: **50 testů prošlo**.
 - Příkazy `gramps probe`, `plan`, `push` a `status` nad in-memory náhradou API:
   oprávnění `0600` plánu, opakovaný stav `synchronized`, kontrola hashů,
   odmítnutí kolize, změněného plánu a nešifrovaného HTTP.
+- Plugin: přenosný manifest Agent Plugins 1.0, kompatibilní manifest pro Codex,
+  shoda verze `0.4.0`, metadata rozhraní a repozitářový marketplace ukazující
+  na kořen balíčku.
 
 Strukturální validace balíčku proběhla nástrojem `quick_validate.py` bez chyb.
+
+## Instalace pluginu v ChatGPT desktop 13. listopadu 2026
+
+Repozitář byl ověřen jako skills-only plugin dvěma nezávislými validátory:
+
+- `quick_validate.py` přijal `skills/family-tree-chatgpt`,
+- `validate_plugin.py` přijal kompatibilní `.codex-plugin/plugin.json`,
+- všechny tři JSON soubory byly znovu načteny standardním parserem Pythonu.
+
+Desktopový plugin runtime z instalace ChatGPT následně provedl tento průchod:
+
+- `plugin marketplace add` přidal kořen repozitáře jako marketplace
+  `family-tree-chatgpt`,
+- `plugin list --available` našel `family-tree-chatgpt` ve verzi `0.4.0`,
+- `plugin add` vytvořil instalační kopii v desktopové plugin cache,
+- závěrečný `plugin list` hlásil `installed: true` a `enabled: true`,
+- instalovaný `plugin.json` a `SKILL.md` byly binárně shodné se zdrojem a
+  instalovaná kopie obsahovala hlavní `scripts/family_tree.py`.
+
+Nová konverzace je hranicí pro načtení nově instalovaného skillu; aktivní
+konverzace se během instalace nerestartovala.
 
 ## Syntetická integrace Gramps Web 12. listopadu 2026
 
