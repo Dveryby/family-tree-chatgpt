@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "family-tree-chatgpt",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "Soukromí respektující nástroj pro dohledatelný genealogický výzkum v češtině.",
   "author": {
     "name": "Dveryby",

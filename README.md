@@ -2,11 +2,11 @@
 
 Český genealogický asistent pro ChatGPT. Projekt připravuje převod postupů a nástrojů z [sarsonj/rodokmen-skill](https://github.com/sarsonj/rodokmen-skill) do prostředí ChatGPT.
 
-Aktuální verze: **0.4.5** (13. listopadu 2026).
+Aktuální verze: **0.5.0** (14. listopadu 2026).
 
 ## Stav
 
-Verze 0.4.5, vydaná 13. listopadu 2026. Obsahuje převedený
+Verze 0.5.0, připravená 14. listopadu 2026. Obsahuje převedený
 pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
 pramenů s historií. Ověřen je lokální export a obnova úplného stavu přes ZIP
 s kontrolními součty. Živý přístup a práce s jedním snímkem byly ověřeny pro
@@ -59,6 +59,15 @@ projektu.
   zajištění tagu `ToDo`,
 - opakovaný push bez duplicit a bez přepisování stavu, priority, titulu nebo
   popisu, které uživatel následně upravil v Gramps Web.
+
+## Novinky ve verzi 0.5.0
+
+- `archive mza import`: nezměněná kopie jednoho oprávněně získaného snímku
+  do soukromého projektu, původ, rozlišení, formát, velikost a SHA-256,
+- `archive mza inspect`: místní kontrola integrity, rozměrů a duplicit bez sítě,
+- zachování metadat a snímku ve stávajícím ZIP exportu a obnově, také pro formát 1,
+- offline adaptér běžných IIIF Image API 2/3 se syntetickými HTTP testy;
+  živé stahování MZA zůstává zakázané bez možnosti aktivace příznakem.
 
 ## Novinky ve verzi 0.3.0
 
@@ -124,6 +133,8 @@ Vyžaduje Python 3.11+ a pro obrazové nástroje Pillow. Testováno na kombinac�
 Python 3.12.14 / Pillow 13.0.0 a Python 3.13.5 / Pillow 11.1.0. Projektové,
 modelové, GEDCOM a Gramps příkazy používají pouze standardní knihovnu Pythonu;
 Pillow se načítá až pro obrazové příkazy.
+Import MZA a dekódování při `archive mza inspect` rovněž vyžadují Pillow;
+nové síťové závislosti se nepřidávají.
 
 ### Instalace pluginu v ChatGPT desktop
 
@@ -160,6 +171,37 @@ python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps tasks plan /sou
 python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps tasks push /soukrome-uloziste/gramps-task-plan.json --url https://rodokmen.example.cz --username editor
 python3 skills/family-tree-chatgpt/scripts/family_tree.py image split /soukrome-uloziste/snimky/scan.png /soukrome-uloziste/snimky/left.png /soukrome-uloziste/snimky/right.png
 ```
+
+### Jeden snímek MZA / ActaPublica
+
+Nejprve získat jednu kopii oprávněnou cestou. [Nápověda MZA](https://www.mza.cz/actapublica/page/view/napoveda)
+uvádí uložení prohlížečem do 2000 bodů na delší straně a kvalitnější kopii
+na vyžádání od archivu. Povolení automatického IIIF nebylo doloženo při
+kontrole 14. listopadu 2026. `archive mza download --url …` proto vždy odmítne
+síťový přístup. Podrobnosti a podklady: [postup MZA](skills/family-tree-chatgpt/references/mza.md).
+
+```sh
+# Projekt založit jen jednou; všechny soubory zůstávají mimo Git.
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research project init
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research archive mza import /private/downloads/scan.jpg --url 'https://www.mza.cz/actapublica/matrika/detail/999999?image=synthetic-001.jp2' --method browser_download
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research archive mza inspect --url 'https://www.mza.cz/actapublica/matrika/detail/999999?image=synthetic-001.jp2'
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research project export /private/research-transfer.zip
+```
+
+Ukázková URL je syntetická; nahradit ji přesným ověřeným odkazem. Podle
+podkladu lze přidat `--reference`, `--image-number`, `--acquired-at` s časovým
+pásmem. Pro oficiální kopii použít `--method archival_copy`; označení
+`--digital-copy original` vyžaduje podklad v `--provenance-note`.
+Neznámé údaje se nedoplňují odhadem. `inspect --file <soubor>` porovná také
+SHA-256. Přesná opakovaná kopie nevytváří další revizi ani nemaže přepis.
+
+Import přijímá jeden JPEG, PNG, TIFF nebo JP2 podporovaný místním Pillow,
+nejvýše 64 MiB, 40 milionů pixelů a 30 000 px na osu. Zachová bajty a uloží
+nový `unread` záznam; nic tím není vizuálně ověřeno. Vrácená cesta `file`
+je relativní k soukromému projektu a lze ji použít pro `image crop`, `split`,
+`mark`, `sheet`. [Datová reference](skills/family-tree-chatgpt/references/data.md)
+popisuje metadata, kontrolu integrity a přenos. V prostředí ChatGPT bez
+souborového přístupu a Pythonu/Pillow spuštění CLI nelze garantovat.
 
 Cesta je příklad; zvol vlastní soukromou složku mimo git repozitáře. Další
 příkazy a formát zápisu jsou v [datové referenci](skills/family-tree-chatgpt/references/data.md),

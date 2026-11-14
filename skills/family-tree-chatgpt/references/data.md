@@ -8,6 +8,8 @@
 - Projektové, modelové, GEDCOM a obrazové příkazy zůstávají offline. Pouze
   výslovná skupina `gramps` používá síť podle [samostatné reference](gramps.md);
   žádný příkaz neprovádí trvalé cloudové ukládání badatelského ZIPu.
+- Skupina `archive mza` importuje a kontroluje místní soubory bez sítě;
+  `download` je vždy zakázán podle [reference MZA](mza.md).
 - Stabilní vstup je `scripts/family_tree.py`. Samostatné `research.py`,
   `gedcom.py`, `crop.py` a `image_review.py` zůstávají kvůli kompatibilitě,
   ale nové postupy mají používat jednotné CLI.
@@ -93,6 +95,51 @@ Ostatní záznamy se nezmění. Před úpravou načíst uloženou verzi.
 Stav je oddělený od totožnosti. I částečně nečitelný zápis může být vizuálně
 zkontrolovaný: ponechat výslovné nejistoty. `supported` a `rejected` vyžadují
 odůvodnění a citace; program kontroluje přítomnost, nikoli věcnou správnost.
+
+## Metadata importovaného snímku MZA
+
+`archive mza import` založí běžný záznam s ID `mza_` a SHA-256 kombinace přesné
+URL a hashe souboru. Nevytváří osoby, vztahy ani tvrzení. `reading_status`
+zůstává `unread`, `visual_review` je `false`, totožnost `unresolved`.
+`source.file` ukazuje do `sources/mza-<SHA-256>.<skutečný-formát>`;
+`source.file_sha256` ověřuje nezměněné bajty. Přípona vstupu se nepovažuje
+za důkaz formátu. Nové nepovinné pole `source.acquisition` obsahuje:
+
+| Pole | Význam |
+| --- | --- |
+| `schema_version` | Verze metadat získání, nyní `1` |
+| `url`, `archive`, `reference` | Skutečná URL, název archivu, známá identifikace knihy; shodné se `source` |
+| `image_number` | Ověřené pořadové číslo, jinak `null`; neodvozuje se z názvu JP2 |
+| `acquired_at`, `imported_at` | ISO časy s časovým pásmem; bez dodaného času získání je použit čas převzetí při importu |
+| `method` | `browser_download`, `archival_copy`, `iiif_assembled`, `screenshot`, `manual_import` |
+| `digital_copy` | `derived`, `original`, `unknown`; `original` vyžaduje archivní kopii s podkladem |
+| `provenance_note` | Podklad pro původ digitální kopie, jinak prázdný text |
+| `format`, `width`, `height` | Skutečný formát Pillow a nezměněné pixelové rozměry |
+| `size_bytes`, `sha256` | Délka a SHA-256 uložených bajtů |
+
+Neznámá signatura zůstává prázdným textem. `browser_download`, `screenshot`
+a `iiif_assembled` jsou odvozené soubory bez ohledu na vstupní příponu.
+Stejné bajty s jinou URL zachovají samostatný záznam původu a společný soubor;
+stejná URL s jinými bajty vytvoří další záznam. Shodný import vrátí
+`duplicate: true`, nezvyšuje revizi a nemění již uložené čtení. Při rozdílných
+metadatech téhož importu skončí chybou; změnu je nutné věcně provést `record put`.
+
+Metadata jsou součástí atomicky ukládaného `research.json` a historie.
+Zápis probíhá pod existujícím zámkem; soubor se nejprve zkopíruje a úplně
+ověří v dočasném umístění, potom atomicky zveřejní bez přepsání. Selhání zápisu
+stavu uklidí právě vytvořenou kopii; dříve existující soubory zachová. Pád procesu
+mezi zveřejněním souboru a uložením JSON může zanechat osiřelou úplnou kopii,
+nikoli úspěšný záznam; po ověření zámku lze import bezpečně zopakovat.
+`project check` kontroluje strukturu původu, shodu SHA-256 a velikost;
+`archive mza inspect` navíc skutečně dekóduje vybraný snímek a porovná rozměry
+a formát. Kontroly neposuzují správnost citace nebo pravost archivní kopie.
+
+Export zahrne metadata v JSON, historii a soubory v `sources/` pomocí stávajícího
+manifestu se SHA-256. Obnova pokračuje stejnou revizí. Starší záznamy bez
+`acquisition` zůstávají platné; nemění se verze badatelského stavu ani ZIPu.
+Import funguje také ve formátu 1, bez automatické migrace. Při následném
+`record put` zachovat celý `source.acquisition` a doplnit identifikaci shodně
+v `source.reference` i metadatech. Obrazové deriváty nadále patří do `crops/`.
 
 ## Výřez
 
