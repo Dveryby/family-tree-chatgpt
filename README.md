@@ -70,7 +70,7 @@ projektu.
   snímku; bez odhadování složek a záměny názvu JP2,
 - evidence souhlasu a IIIF průchodu ve stavu a ZIPu; zachování úplné kopie
   pro import při selhání zápisu stavu. Úspěšné živé stažení zatím neověřeno:
-  první skutečný pokus zachytil ochranný obsah a bezpečně skončil.
+  nový pokus po opravě detekce doložil aktivní Altcha gate a bezpečně skončil.
 
 ## Novinky ve verzi 0.5.0
 
@@ -214,6 +214,10 @@ Volitelné `--permission-file /private/mza-permission.json` určí jiný soukrom
 záznam souhlasu. Při CAPTCHA/Altcha, 401/403/429 nebo přesměrování operace
 skončí; nepřepíná na jiný klient nebo endpoint. Automatické řešení ochrany,
 dávkové stahování, cookie import a autentizace nejsou podporované.
+Volitelné `--diagnostics-dir /private/mza-diagnostics-new` uloží odpovědi,
+HTTP stav, konkrétní důvod a SHA-256 do nové soukromé složky. Odkazy na
+skripty CAPTCHA/Altcha samy postup nezastaví; rozhodují ochranné HTML prvky.
+Citlivé hlavičky se neukládají a známá pole přístupových údajů se redigují.
 
 Ukázková URL je syntetická; nahradit ji přesným ověřeným odkazem. Podle
 podkladu lze přidat `--reference`, `--image-number`, `--acquired-at` s časovým

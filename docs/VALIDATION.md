@@ -428,8 +428,9 @@ ruční převzetí bez dalšího stahování. Již uložená přesná URL se zno
 
 Po úspěšných testech byl proveden jediný pokus proti veřejnému detailu
 z příkladu referenčního projektu (interní detail 7163). Transport dostal
-HTTP 200 a detekce ochranného obsahu operaci ukončila ještě před vyhledáním
-obrazové adresy. Žádné info.json, snímek ani dlaždice nebyly poté požadovány.
+HTTP 200 a původní textová shoda captcha/altcha operaci ukončila ještě před
+vyhledáním obrazové adresy. HTML tehdy nebylo uložené; tento výsledek sám
+neprokazoval aktivní ochranu a následně byl takto upřesněn. Žádné info.json, snímek ani dlaždice nebyly poté požadovány.
 Nebyl použit alternativní klient, ruční odemykání, token ani jiná síťová cesta.
 Soukromý výsledek pokusu a prázdný projekt zůstaly mimo Git.
 
@@ -464,5 +465,59 @@ konfigurační soubor ani soukromý výsledek skutečného pokusu nejsou součá
 
 Dodatečně ověřen společný zámek proti paralelním příkazům, odvolání či změna
 souhlasu mezi požadavky a započtení částečně přijatých bajtů při timeoutu
-do celkového přenosového limitu. Po prvním zachycení ochrany se živý pokus
-neopakoval.
+do celkového přenosového limitu. V tomto původním běhu se živý pokus
+neopakoval; pozdější opakování na výslovný požadavek je popsáno níže.
+
+
+## Oprava detekce a uložená diagnostika MZA, 14. listopadu 2026
+
+Původní detektor zastavoval HTML s pouhým výskytem slov captcha/altcha,
+tedy i běžný odkaz na skript. Nahrazen je strukturálním parserem HTML:
+ignoruje skripty, styly, komentáře, odkazy, text a neaktivní šablony; rozpoznává
+konkrétní widgety nebo ochranné formuláře. HTTP 401/403/429, přesměrování,
+HTML místo IIIF a chyba parsování mají samostatné klasifikace. Bez důkazu
+konkrétního prvku se už samotné slovo nevydává za aktivní výzvu.
+
+Přidán volitelný `--diagnostics-dir` pro novou soukromou složku mimo Git.
+Ukládá odpovědi před rozhodnutím o pokračování, konkrétní signály, HTTP stav,
+vybrané hlavičky, velikost, SHA-256 přijatých a uložených bajtů a souhrn pokusu.
+Cookies a autentizační hlavičky se neukládají; známá citlivá pole se redigují.
+Případná redakce je výslovně označená. Diagnostika má práva 0600 a nesmí
+přepsat existující složku. V tomto PR se nezveřejňují skutečné HTML odpovědi.
+
+### Doložený výsledek opakovaného pokusu
+
+Na výslovný požadavek proběhl jeden nový pokus se stejným veřejným detailem
+(interní ID 7163) dne 14. listopadu v **09:27:52 SEČ**. Uložená odpověď:
+
+- HTTP **200**, `text/html; charset=UTF-8`, **22 826 bajtů**;
+- SHA-256 přijatého i uloženého HTML:
+  `c21336f1cafe56e8f77b26bc227b42ecd0bff67feff93fe0b27820eca0d9b61b`;
+- klasifikace `active_challenge`, konkrétní signál `altcha_widget`;
+- HTML obsahuje `<altcha-widget>` s atributy `auto` a `challenge` v kontejneru
+  `id="altcha-gate"` v aktivní části snímků. Styl widget zmenšuje na 1 × 1 px,
+  ale nevypíná jeho automatickou činnost;
+- lokální inspekce uloženého kódu ukázala obsluhu události `verified`, která
+  chce odeslat výsledek na archiv a znovu načíst stránku. Tento kód se
+  nespouštěl a ověřovací požadavek nebyl odeslán.
+
+Tentokrát jde o doloženou ochrannou bránu, nikoli pouhé jméno skriptu.
+Po první odpovědi se operace ukončila. **Žádný další HTTP požadavek**, info.json,
+obrazový snímek ani dlaždice se nestahovaly. Nedocházelo k řešení ani obcházení
+Altcha, přebírání cookies či přepnutí klienta. Úspěšné živé získání úplného
+obrazu a jeho skutečné rozlišení zůstávají neověřené; PR #16 proto zůstává draft.
+Diagnostická odpověď, metadata a souhrn jsou v soukromém úložišti mimo Git.
+
+### Ověření opravy
+
+Celá sada: **118 testů, OK** (Python 3.13.5 / Pillow 11.1.0), bez produkčních
+požadavků v automatických testech. Přibylo 8 testů struktury ochranných stránek
+a 5 testů diagnostiky/živého toku; celkem je proti výchozím 88 testům v main
+30 nových testů. Všechny obrazové podklady testů jsou syntetické.
+
+Ověřeno pokračování při běžném odkazu na altcha/recaptcha skript, inline JS,
+komentářích, textu a neaktivních šablonách; zastavení při skutečných widgetech
+včetně automatického widgetu o velikosti 1 px a widgetu za prvních 64 KiB HTML.
+Dále rozlišení HTML místo IIIF, zachování autoritativního HTTP stavu i při
+vadném HTML, uložení diagnostiky před chybou, redakce citlivých polí a odmítnutí
+přepsání či uložení do Git. Verze zůstává 0.6.0 jako oprava dosud nevydaného PR.

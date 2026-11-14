@@ -63,7 +63,7 @@ neznamená otevřenou relaci ani úspěšný živý průchod. Již uloženou př
 ## Živý průchod a šetrnost
 
 1. Ověřit soukromý souhlas, workspace, revizi a URL jednoho konkrétního snímku.
-2. Načíst pouze veřejný detail. Při CAPTCHA/Altcha, 401/403/429 nebo jakémkoli
+2. Načíst pouze veřejný detail. Při aktivním HTML prvku CAPTCHA/Altcha, 401/403/429 nebo jakémkoli
    přesměrování zastavit celou operaci, bez jiného klienta nebo endpointu.
 3. Přijmout pouze úplný obrazový zdroj zveřejněný na stránce, který přesně
    odpovídá vybranému JP2. Nenahrazovat názvy souborů ani neodhadovat složku.
@@ -108,13 +108,37 @@ Soubor se atomicky zveřejní pod SHA-256, bez přepisování a s právy 0600.
 pomocné soukromé složce; příkaz vypíše její cestu. Export, obnova a stávající
 `crop/split/mark/sheet` fungují nad importem. Podrobnosti: [data](data.md).
 
-Uživatelské potvrzení souhlasu bylo poskytnuto 14. listopadu 2026. Skutečný
-pokus téhož dne skončil na prvním veřejném detailu s HTTP 200 při detekci
-obsažené ochrany; žádné info.json, obrazové zdroje ani dlaždice nebyly dále
-oslovovány. Úspěšné živé stažení ani skutečné plné rozlišení se zatím netvrdí.
+Uživatelské potvrzení souhlasu bylo poskytnuto 14. listopadu 2026. První
+pokus skončil na příliš obecné detekci názvu captcha/altcha; bez uloženého
+HTML neprokazoval aktivní výzvu. Opakování po opravě detekce dne 14. listopadu
+v 09:27:52 SEČ uložilo HTTP 200, 22 826 bajtů HTML a doložilo skutečný prvek
+`altcha-widget` s `auto` a `challenge` uvnitř `altcha-gate`. Widget je úmyslně
+veliký jen 1 × 1 px; jde o aktivní automatické ověření, nikoli pouhý odkaz na
+skript. Kód stránky po události `verified` požaduje serverové ověření a reload.
+Downloader tento kód nespouští. Byl proveden právě jeden HTTP požadavek;
+žádný ověřovací POST, info.json ani dlaždice se neposílaly. Úspěšné živé stažení ani skutečné plné rozlišení se zatím netvrdí.
 Offline testy ověřují stejný průchod přes mock HTTPS. Dřívější skutečný pilot
 z 11. listopadu zachoval jen browserový screenshot 1078 × 1034 px.
 Další důkazy a omezení jsou v `../../../docs/VALIDATION.md`.
+
+## Diagnostika a rozlišení chyb
+
+`download --diagnostics-dir <nová-soukromá-složka>` je výslovně volitelný.
+Pro každou odpověď uloží tělo, povolené hlavičky (typ, délku, datum, Retry-After),
+HTTP stav, klasifikaci, konkrétní rozpoznané prvky a SHA-256 přijatých i uložených
+bajtů. Zapisuje s právy 0600, odmítá Git, symlinky a přepsání existující složky.
+Cookies ani Authorization se nezapisují; známá citlivá pole HTML/JSON/JS jsou
+redigována a případná změna těla je označena. Soubory uchovat soukromě, ne v PR.
+V diagnostickém režimu se omezeně přečte i tělo chybové odpovědi, bez následování
+přesměrování či dalšího požadavku. `attempt.json` uchová přesný výsledek pokusu.
+
+Detekce čte strukturu HTML: widget nebo ochranný formulář, ne samotná slova
+v textu, komentářích, odkazech, skriptech či stylech. Šablony a explicitně
+skryté části se ignorují; automatický widget o velikosti 1 px je stále aktivní.
+Není to prohlížeč: nevyhodnocuje JavaScript ani externí CSS. Klasifikace
+`active_challenge`, `http_401/403/429`, `redirect`, `unexpected_html` a
+`html_parse_error` mají oddělené významy. HTML místo IIIF není automaticky
+důkaz CAPTCHA. Jakákoli taková chyba ukončí relaci bez další síťové cesty.
 
 V ChatGPT bez lokálního Pythonu/Pillow, souborů nebo síťových oprávnění
 neslibovat spuštění; použít dostupný import a sdělit konkrétní omezení prostředí.

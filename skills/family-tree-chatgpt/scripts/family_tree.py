@@ -179,6 +179,7 @@ def execute(args):
         if args.mza_command == "download":
             return mza.download(
                 args.url, args.workspace, permission_file=args.permission_file,
+                diagnostics_dir=args.diagnostics_dir,
                 reference=args.reference, image_number=args.image_number,
                 expected_revision=args.expected_revision,
             )
@@ -288,6 +289,7 @@ def build_parser():
     mza_download = mza_commands.add_parser("download", help="jeden snímek IIIF s evidovaným souhlasem MZA")
     mza_download.add_argument("--url", required=True)
     mza_download.add_argument("--permission-file", type=Path, help="soukromá evidence souhlasu; jinak uživatelské nastavení")
+    mza_download.add_argument("--diagnostics-dir", type=Path, help="nová soukromá složka pro odpovědi a přesný důvod zastavení")
     mza_download.add_argument("--reference", default="")
     mza_download.add_argument("--image-number", type=int)
     mza_download.add_argument("--expected-revision", type=int)

@@ -167,6 +167,22 @@ pomocná složka není zahrnutá do ZIPu, dokud neproběhne skutečný import.
 Při opakovaném `download` již uložené přesné URL se použije místní kontrola,
 bez sítě. Případnou novou archivní verzi je nutné vybrat a posoudit výslovně.
 
+## Soukromá diagnostika MZA
+
+Volitelné `archive mza download --diagnostics-dir <nová-složka>` ukládá
+`response-0001.html/json/bin`, odpovídající `response-0001.metadata.json`
+a souhrnný `attempt.json`. Metadata obsahují URL, HTTP stav, omezenou sadu
+hlaviček, klasifikaci odpovědi, rozpoznané prvky, velikost a SHA-256 přijatého
+a uloženého těla a příznak redakce. Cookies a autentizační hlavičky se neukládají;
+známá citlivá pole se redigují. Názvy souborů se odvozují z pořadí, ne z URL.
+Vše má práva 0600 a zůstává mimo Git. Výstup se nepřepisuje.
+
+Diagnostika není genealogický pramen ani úspěšně stažený snímek. Doporučené
+umístění je mimo `sources/`, `crops/` a `history/`; pak ji existující ZIP export
+nezahrne. Při `active_challenge` se zachová odpověď a přesný důvod, ale nevzniká
+import ani vizuální ověření. U některých transportních chyb před přijetím celé
+odpovědi může být dostupný pouze souhrn chyby, nikoli tělo.
+
 ## Výřez
 
 ```sh

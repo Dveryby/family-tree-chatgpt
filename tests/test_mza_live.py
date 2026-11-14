@@ -126,7 +126,7 @@ class LiveMZATests(unittest.TestCase):
 
     def test_forbidden_status_and_challenge_never_query_image_service(self):
         for response in ((403, {}, b""), (429, {}, b""), (302, {"location": LIVE_BASE}, b""),
-                         (200, {"content-type": "text/html"}, b"<html>Altcha</html>")):
+                         (200, {"content-type": "text/html"}, b"<html><altcha-widget></altcha-widget></html>")):
             server = Mock(return_value=response)
             with self.subTest(status=response[0]), self.assertRaises(ValueError):
                 self.acquire(server)
@@ -173,7 +173,7 @@ class LiveMZATests(unittest.TestCase):
                 self.assertTrue(research.check_state(broken, self.root))
 
     def test_challenge_late_in_html_stops_before_image_discovery(self):
-        server = Mock(return_value=(200, {"Content-Type": "text/html"}, b"x" * 70000 + b"altcha"))
+        server = Mock(return_value=(200, {"Content-Type": "text/html"}, b"x" * 70000 + b"<altcha-widget></altcha-widget>"))
         with self.assertRaises(ValueError):
             self.acquire(server)
         self.assertEqual(server.call_count, 1)
@@ -186,6 +186,69 @@ class LiveMZATests(unittest.TestCase):
         self.assertFalse(mza_live.LOCK_FILE.exists())
         self.acquire()
         self.assertFalse(mza_live.LOCK_FILE.exists())
+
+    def test_download_continues_past_benign_captcha_script_references(self):
+        original = LiveMock()
+        def server(url, **options):
+            status, headers, body = original(url, **options)
+            if url == URL:
+                body += b'<script src="/js/altcha.js"></script><script>var captcha = true;</script>'
+            return status, headers, body
+        self.assertTrue(self.acquire(server)["downloaded"])
+        self.assertEqual(len(original.calls), 3)
+
+    def test_diagnostics_saved_before_block_without_credential_headers(self):
+        directory = self.base / "diagnostics"
+        server = Mock(return_value=(200, {
+            "Content-Type": "text/html", "Set-Cookie": "secret-session", "Authorization": "secret-auth",
+        }, b'<html><meta name="csrf-token" content="secret-meta"><input value="secret-csrf" name="csrf_token"><altcha-widget></altcha-widget></html>'))
+        with self.assertRaisesRegex(ValueError, "active_challenge.*Diagnostika"):
+            self.acquire(server, diagnostics_dir=directory)
+        self.assertEqual(server.call_count, 1)
+        metadata = json.loads((directory / "response-0001.metadata.json").read_text())
+        self.assertEqual(metadata["diagnosis"]["signals"], ["altcha_widget"])
+        self.assertEqual(metadata["status"], 200)
+        self.assertTrue(metadata["redacted"])
+        contents = b"\n".join(path.read_bytes() for path in directory.iterdir())
+        for secret in (b"secret-session", b"secret-auth", b"secret-csrf", b"secret-meta"):
+            self.assertNotIn(secret, contents)
+        self.assertIn(b"[REDACTED]", contents)
+        for path in directory.iterdir():
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(json.loads((directory / "attempt.json").read_text())["responses"], 1)
+
+    def test_successful_diagnostics_capture_all_responses_and_never_overwrite(self):
+        directory = self.base / "diagnostics"
+        result = self.acquire(diagnostics_dir=directory)
+        self.assertEqual(result["diagnostics_dir"], str(directory))
+        self.assertEqual(len(list(directory.glob("*.metadata.json"))), 3)
+        self.assertEqual(json.loads((directory / "attempt.json").read_text())["error"], None)
+        with self.assertRaises(FileExistsError):
+            mza_live.ResponseDiagnostics(directory)
+        with patch.object(research, "in_git_tree", return_value=True), self.assertRaises(ValueError):
+            mza_live.ResponseDiagnostics(self.base / "repo-diagnostics")
+
+    def test_malformed_deep_html_is_saved_without_claiming_a_challenge(self):
+        directory = self.base / "deep-html"
+        server = Mock(return_value=(200, {"Content-Type": "text/html"}, b"<div>" * 513))
+        with self.assertRaisesRegex(ValueError, "vnoření.*Diagnostika"):
+            self.acquire(server, diagnostics_dir=directory)
+        metadata = json.loads((directory / "response-0001.metadata.json").read_text())
+        self.assertEqual(metadata["diagnosis"]["classification"], "html_parse_error")
+        self.assertEqual(metadata["diagnosis"]["signals"], [])
+        self.assertEqual(server.call_count, 1)
+
+    def test_diagnostic_mode_reads_block_body_but_does_not_follow_redirect(self):
+        connection = Mock()
+        response = connection.getresponse.return_value
+        response.status = 403
+        response.getheaders.return_value = [("Content-Type", "text/html"), ("Content-Length", "4")]
+        response.read.side_effect = [b"deny", b""]
+        with patch.object(mza_live, "public_addresses", return_value=["8.8.8.8"]), \
+                patch("http.client.HTTPSConnection", return_value=connection) as factory:
+            result = mza_live.HTTPSTransport(capture_error_body=True)(URL, timeout=15, max_bytes=4096)
+        self.assertEqual(result, (403, {"content-type": "text/html", "content-length": "4"}, b"deny"))
+        self.assertEqual(factory.call_count, 1)
 
     def test_revocation_between_requests_stops_before_image_service(self):
         original = LiveMock()

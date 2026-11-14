@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import hashlib
 from io import BytesIO
+from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
@@ -386,12 +387,81 @@ def parse_info(info, validator=test_service_url):
             "requests": requests}
 
 
+class ProtectionPage(HTMLParser):
+    """Recognize HTML challenge controls, not words in JS, links or prose."""
+
+    VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+    IGNORED_TAGS = {"script", "style", "template", "noscript"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack = []
+        self.signals = set()
+
+    def handle_starttag(self, tag, attrs):
+        attrs = {key: value or "" for key, value in attrs}
+        hidden = (bool(self.stack and self.stack[-1][1]) or tag in self.IGNORED_TAGS
+                  or "hidden" in attrs or "inert" in attrs or attrs.get("aria-hidden", "").lower() == "true"
+                  or bool(re.search(r"display\s*:\s*none|visibility\s*:\s*hidden", attrs.get("style", ""), re.I)))
+        if not hidden:
+            classes = set(attrs.get("class", "").lower().split())
+            if tag == "altcha-widget":
+                self.signals.add("altcha_widget")
+            for name in ("g-recaptcha", "h-captcha", "cf-turnstile"):
+                if name in classes and attrs.get("data-sitekey"):
+                    self.signals.add(name)
+            if tag == "form" and attrs.get("id", "").lower() in {
+                "challenge-form", "captcha-form", "altcha-form", "hcaptcha-form", "cf-chl-form"
+            }:
+                self.signals.add("challenge_form")
+        if tag not in self.VOID_TAGS:
+            if len(self.stack) >= 512:
+                raise ValueError("HTML překračuje limit vnoření; další požadavky nebyly provedeny.")
+            self.stack.append((tag, hidden))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag not in self.VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                del self.stack[index:]
+                break
+
+
+def response_diagnosis(status, headers, body, allow_html=False):
+    prefix = body[:2048].lstrip().lower()
+    is_html = ("text/html" in headers.get("content-type", "").lower()
+               or prefix.startswith((b"<!doctype html", b"<html", b"<head", b"<body", b"<form", b"<altcha-widget")))
+    if status in (401, 403, 429) or 300 <= status < 400:
+        return {"classification": "redirect" if 300 <= status < 400 else f"http_{status}",
+                "signals": [], "is_html": is_html}
+    signals = []
+    if is_html or allow_html:
+        parser = ProtectionPage()
+        parser.feed(body[:2 * 1024 * 1024].decode("utf-8", errors="replace"))
+        parser.close()
+        signals = sorted(parser.signals)
+    if signals:
+        classification = "active_challenge"
+    elif status == 200 and is_html and not allow_html:
+        classification = "unexpected_html"
+    elif status != 200:
+        classification = "http_error"
+    else:
+        classification = "ok"
+    return {"classification": classification, "signals": signals, "is_html": is_html}
+
+
 class IIIFSession:
     """Bounded sequential IIIF session; redirects and challenges always stop it."""
 
-    def __init__(self, transport, *, sleep=time.sleep, validator=test_service_url, interval=2):
+    def __init__(self, transport, *, sleep=time.sleep, validator=test_service_url, interval=2, observer=None):
         self.transport, self.sleep = transport, sleep
         self.validator, self.interval = validator, interval
+        self.observer = observer
         self.stopped = False
         self.count = self.transferred = 0
 
@@ -418,13 +488,22 @@ class IIIFSession:
             if len(body) > limit or self.transferred > MAX_TRANSFER_BYTES:
                 self.stopped = True
                 raise ValueError("Překročen limit přenosu.")
-            protection_probe = body.lower() if allow_html else body[:65536].lower()
-            if (status in (401, 403, 429) or 300 <= status < 400
-                    or (not allow_html and "text/html" in headers.get("content-type", "").lower())
-                    or any(word in protection_probe for word in (b"captcha", b"altcha"))
-                    or (not allow_html and b"<html" in body[:4096].lower())):
+            try:
+                diagnosis = response_diagnosis(status, headers, body, allow_html)
+            except ValueError:
                 self.stopped = True
-                raise ValueError(f"HTTP {status}: ochrana, blokace nebo přesměrování; zastaveno.")
+                if self.observer is not None:
+                    self.observer(url, status, headers, body, {
+                        "classification": "html_parse_error", "signals": [], "is_html": True,
+                    })
+                raise
+            if self.observer is not None:
+                self.observer(url, status, headers, body, diagnosis)
+            classification = diagnosis["classification"]
+            if classification in ("http_401", "http_403", "http_429", "redirect", "active_challenge", "unexpected_html"):
+                self.stopped = True
+                detail = ", ".join(diagnosis["signals"])
+                raise ValueError(f"HTTP {status}: {classification}" + (f" ({detail})" if detail else "") + "; zastaveno.")
             if status in (500, 502, 503, 504) and attempt == 0:
                 retry = headers.get("retry-after", "2")
                 try:

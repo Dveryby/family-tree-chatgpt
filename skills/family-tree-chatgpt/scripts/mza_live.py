@@ -114,8 +114,9 @@ class HTTPSTransport:
     response is bounded before allocation, including chunked HTTP responses.
     """
 
-    def __init__(self):
+    def __init__(self, *, capture_error_body=False):
         self.transferred = 0
+        self.capture_error_body = capture_error_body
 
     def __call__(self, url, *, timeout, max_bytes):
         live_url(url)
@@ -142,7 +143,7 @@ class HTTPSTransport:
             active_socket.settimeout(remaining)
             response = connection.getresponse()
             headers = {key.lower(): value for key, value in response.getheaders()}
-            if response.status in (401, 403, 429) or 300 <= response.status < 400:
+            if (response.status in (401, 403, 429) or 300 <= response.status < 400) and not self.capture_error_body:
                 return response.status, headers, b""
             length = headers.get("content-length")
             if length is not None and (not length.isdigit() or int(length) > min(max_bytes, mza.MAX_TRANSFER_BYTES - self.transferred)):
@@ -210,13 +211,78 @@ def discover_service(html, detail_url):
     return found.pop()
 
 
-def download(root, url, **options):
+class ResponseDiagnostics:
+    """Explicit private response capture, excluding credential headers and fields."""
+
+    def __init__(self, directory):
+        candidate = Path(directory).expanduser()
+        if candidate.is_symlink() or research.in_git_tree(candidate.resolve()):
+            raise ValueError("Diagnostiku ulož do nové soukromé složky mimo Git, nikoli symlinku.")
+        self.root = candidate.resolve()
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=False)
+        self.count = 0
+
+    def write(self, name, data):
+        fd = os.open(self.root / name, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+
+    @staticmethod
+    def redact(body):
+        names = rb"(?:_token|token|csrf(?:[_-]?token)?|authenticity_token|(?:access|refresh|auth)[_-]?token|password|authorization)"
+        def credential_tag(match):
+            tag = match.group(0)
+            if re.search(rb"\bname\s*=\s*[\"']?" + names + rb"(?:[\"'\s>])", tag, re.I):
+                tag = re.sub(rb"\b(value|content)\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)",
+                             lambda value: value[1] + b'="[REDACTED]"', tag, flags=re.I)
+            return tag
+        value = re.sub(rb"<(?:input|meta)\b[^>]*>", credential_tag, body, flags=re.I)
+        return re.sub(rb"([\"']?" + names + rb"[\"']?\s*[:=]\s*)([\"'])(.*?)\2",
+                      lambda match: match[1] + match[2] + b"[REDACTED]" + match[2], value, flags=re.I | re.S)
+
+    def __call__(self, url, status, headers, body, diagnosis):
+        self.count += 1
+        prefix = f"response-{self.count:04d}"
+        textual = diagnosis["is_html"] or "json" in headers.get("content-type", "").lower()
+        saved = self.redact(body) if textual else body
+        suffix = ".html" if diagnosis["is_html"] else ".json" if textual else ".bin"
+        self.write(prefix + suffix, saved)
+        metadata = {
+            "at": research.now(), "url": url, "status": status,
+            "headers": {key: value for key, value in headers.items() if key in (
+                "content-type", "content-length", "retry-after", "date"
+            )},
+            "diagnosis": diagnosis, "body_file": prefix + suffix,
+            "received_size_bytes": len(body), "received_sha256": hashlib.sha256(body).hexdigest(),
+            "saved_size_bytes": len(saved), "saved_sha256": hashlib.sha256(saved).hexdigest(),
+            "redacted": saved != body,
+        }
+        self.write(prefix + ".metadata.json", (json.dumps(metadata, ensure_ascii=False, indent=2) + "\n").encode())
+
+    def finish(self, *, error=None):
+        self.write("attempt.json", (json.dumps({
+            "at": research.now(), "responses": self.count, "error": error,
+        }, ensure_ascii=False, indent=2) + "\n").encode())
+
+
+def download(root, url, *, diagnostics_dir=None, **options):
     with acquisition_lock():
-        return _download(root, url, **options)
+        diagnostics = ResponseDiagnostics(diagnostics_dir) if diagnostics_dir is not None else None
+        try:
+            result = _download(root, url, observer=diagnostics, **options)
+        except (ValueError, OSError) as exc:
+            if diagnostics is not None:
+                diagnostics.finish(error=str(exc))
+                raise ValueError(f"{exc} Diagnostika: {diagnostics.root}") from exc
+            raise
+        if diagnostics is not None:
+            diagnostics.finish()
+            result["diagnostics_dir"] = str(diagnostics.root)
+        return result
 
 
 def _download(root, url, *, permission_file=None, reference="", image_number=None,
-             expected_revision=None, transport=None, sleep=time.sleep):
+             expected_revision=None, transport=None, sleep=time.sleep, observer=None):
     permission = load_permission(permission_file)
     root = research.private_workspace(root)
     mza.archive_url(url)
@@ -242,8 +308,8 @@ def _download(root, url, *, permission_file=None, reference="", image_number=Non
             raise ValueError("Evidence souhlasu se mezitím změnila; operace byla zastavena.")
         return live_url(candidate)
 
-    session = mza.IIIFSession(transport or HTTPSTransport(), validator=authorized_url,
-                              interval=permission["min_interval_seconds"], sleep=sleep)
+    session = mza.IIIFSession(transport or HTTPSTransport(capture_error_body=observer is not None), validator=authorized_url,
+                              interval=permission["min_interval_seconds"], sleep=sleep, observer=observer)
     html = session.get(url, 2 * 1024 * 1024, allow_html=True)
     try:
         base = discover_service(html.decode("utf-8"), url)
