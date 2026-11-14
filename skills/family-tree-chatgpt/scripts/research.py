@@ -129,6 +129,10 @@ def validate_record(record, root, verify_hashes=False):
                     errors.append(f"Změněný soubor nebo chybějící SHA-256: source.{field}.")
             except ValueError as exc:
                 errors.append(str(exc))
+    if "acquisition" in source:
+        import mza
+
+        errors.extend(mza.validate_acquisition(source["acquisition"], source, root, verify_hashes))
     return errors
 
 

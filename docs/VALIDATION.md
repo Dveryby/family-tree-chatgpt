@@ -306,3 +306,95 @@ Ověřeno je tedy hledání, detail knihy, ruční Altcha, jeden konkrétní sn�
 citace, přesný odkaz a výřez ze screenshotu. Neověřuje to paleografickou
 správnost čtení, automatické procházení, přímé stažení obrazu ani trvalost
 uživatelské relace. Altcha zůstává úmyslně ručním krokem.
+
+## Import MZA a offline IIIF, 14. listopadu 2026 (0.5.0)
+
+Audit před implementací zahrnul README, AGENTS, aktuální skill, reference
+MZA/data, jednotné CLI, ukládání stavu, ZIP přenos a existující testy.
+Výchozí čistá větev `main` byla na revizi `7781926`; původních 56 testů prošlo.
+Implementace vznikla na `feature/mza-image-acquisition`.
+
+### Podmínky archivu
+
+Přečteny oficiální [podmínky](https://www.mza.cz/actapublica/page/view/podminky-uziti-sluzeb),
+[nápověda](https://www.mza.cz/actapublica/page/view/napoveda) a
+[aktuality](https://www.mza.cz/actapublica/aktuality). Nápověda dokládá
+browserové uložení jednotlivého snímku/výřezu do 2000 bodů na delší straně
+a kvalitnější kopii na vyžádání u MZA. Povolení automatického skládání IIIF
+v těchto podkladech nalezeno nebylo. Zpráva ze 7. dubna 2026 navíc upozorňuje
+na 24hodinové blokace při vysokém počtu požadavků na digitalizáty.
+
+Produkční obrazové zdroje, info.json ani dlaždice nebyly oslovovány.
+Zákaz síťového přístupu MZA zůstává zachovaný; `download` vždy odmítne operaci
+ještě před sítí. Testovací adaptér nemá produkční HTTP/TLS transport,
+neřeší mapování detailu matriky na obrazovou službu a odmítá skutečné domény.
+Neexistuje aktivace příznakem CLI. Pro případnou budoucí aktivaci zbývá doložit
+oprávnění, pravidla rychlosti a implementovat i ověřit bezpečný živý transport
+s TLS, ochranou proti SSRF a kontrolou přesměrování. Dosavadní pilot screenshotu
+z 11. listopadu tuto podmínku nenahrazuje.
+
+### Referenční projekt a původ implementace
+
+Prostudován [actapublica-image-downloader](https://github.com/lffelmann/actapublica-image-downloader)
+na revizi `8b9420f6368533588e8e292039980acf6b3c7610`, soubory `main.py`,
+`README.md`, `requirements.txt` a `LICENSE` (Unlicense). Používá requests,
+Pillow a urllib3. Audit našel vypnuté TLS, pevnou konstrukci obrazové adresy,
+chybějící úplnou validaci metadat a okrajových dlaždic a pokračování po chybě
+dlaždice až k uložení neúplného obrazu. Kód ani dokumentace nebyly převzaty;
+nový modul je samostatná implementace v rámci stávajícího projektu, bez nových
+závislostí. Původní MIT oznámení projektu zůstávají zachovaná.
+
+Plánování a syntaktické rozdíly obrazových požadavků ověřeny proti oficiálním
+specifikacím [IIIF 2.1](https://iiif.io/api/image/2.1/) a
+[IIIF 3](https://iiif.io/api/image/3.0/). Adaptér zpracovává jejich běžnou
+podmnožinu; kompatibilita s reálnými endpointy MZA se tím netvrdí.
+
+### Důkazy testů
+
+Prostředí: Python 3.13.5, Pillow 11.1.0, dostupný dekodér JPEG2000.
+Spuštěno `python3 -m unittest discover -s tests -v`:
+**88 testů, 6,830 s, OK**; z toho **32 nových testů** v `tests/test_mza.py`.
+Testy používají pouze generované obrázky, dočasné soukromé složky a mock
+HTTP server v paměti; nespoléhají na produkční síť ani živý server MZA.
+
+Ověřeno:
+
+- bezeztrátový import bajtů PNG, JPEG, TIFF i JP2 a rozpoznání skutečného
+  formátu přes zavádějící příponu, odmítnutí vícestránkového TIFFu;
+- původ, čas, rozměry, velikost, SHA-256 a oprávnění kopie 0600;
+- zachování `unread`, neověřené totožnosti a prázdného modelu tvrzení;
+- opakovaný import bez změny revize a bez ztráty rozpracovaného přepisu;
+- stejné bajty s různými URL a různé bajty se stejnou URL bez záměny původu;
+- kontrola integrity, metadat, symlinků, Git umístění, limitů a staré revize;
+- odmítnutí kolize souboru i ID, souběžné zveřejnění bez přepsání a úklid
+  po selhání uložení stavu;
+- stávající `crop`, `split`, `mark`, `sheet`, ZIP export, obnova i pokračování;
+- import a obnova ve formátu 1 bez automatické migrace, následná výslovná migrace;
+- metadata IIIF 2/3, chybná/neúplná metadata, limity a implicitní maxHeight,
+  nejméně požadavků, nekvadratické a okrajové dlaždice, přesná shoda všech
+  výsledných pixelů s dekódovanými JPEG dlaždicemi;
+- chybějící, poškozené a nesprávně velké dlaždice bez publikování obrazu;
+- HTTP 401/403/404/429/500/503, timeout, jediné opakování přechodných chyb,
+  Retry-After v sekundách i HTTP datu a ukončení při příliš dlouhém čekání;
+- blokace/HTML/Altcha, odmítnutí všech přesměrování a nepovolených domén,
+  path traversal, zastavení relace a omezení přenosu i počtu požadavků;
+- zakázaný downloader a odmítnutí domnělého aktivačního příznaku;
+- shoda verze 0.5.0 v obou manifestech a VERSION; stávající marketplace
+  nadále odkazuje na stejný kořen a vlastní pole verze nemá.
+
+### Skutečně ověřená rozlišení a omezení
+
+| Podklad | Výsledné rozlišení | Co prokazuje |
+| --- | --- | --- |
+| Syntetický import PNG, včetně ZIP obnovy a obrazových příkazů | 2101 × 1703 px | Zachování místní kvalitní kopie bez zmenšení |
+| Syntetická IIIF 2/3 sestava z 12 JPEG dlaždic 173 × 127 px | 517 × 389 px | Správné složení včetně poslední dlaždice 171 × 8 px |
+| Syntetický celý IIIF 2/3 obraz | 517 × 389 px | Volba jediného obrazového požadavku |
+| Syntetické importy JPEG, PNG, TIFF, JP2 | 31 × 23 px | Detekce formátu a nezměněné bajty |
+| Dřívější skutečný screenshot MZA (11. listopadu) | 1078 × 1034 px | Pouze tehdejší browserový pilot, ne plné rozlišení |
+
+Rozměry z README cizího downloaderu nejsou výsledkem našeho testu. Skutečné
+plné rozlišení MZA nebylo získáno ani ověřeno. Hotová je bezpečná importní
+část a testovaný offline adaptér; živé stahování zůstává nepovolené a neověřené.
+Žádný test neověřuje paleografii, totožnost osoby ani pravost archivní kopie.
+Nové soubory obsahují obecný kód a syntetické údaje; rodinné snímky, přepisy,
+GEDCOM ani přístupové údaje se do změny nepřidávají.

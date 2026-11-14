@@ -173,6 +173,20 @@ def gramps_command(args):
 
 
 def execute(args):
+    if args.command == "archive":
+        import mza
+
+        if args.mza_command == "download":
+            return mza.download(args.url)
+        if args.mza_command == "inspect":
+            root = require_workspace(args) if args.workspace is not None else None
+            return mza.inspect(args.url, root, args.file)
+        return mza.import_image(
+            require_workspace(args), args.file, args.url, method=args.method,
+            reference=args.reference, image_number=args.image_number,
+            digital_copy=args.digital_copy, provenance_note=args.provenance_note,
+            acquired_at=args.acquired_at, expected_revision=args.expected_revision,
+        )
     if args.command == "gedcom":
         return gedcom_import(args)
     if args.command == "image":
@@ -246,6 +260,29 @@ def build_parser():
     parser.add_argument("--version", action="version", version=f"%(prog)s {project_version()}")
     parser.add_argument("--workspace", type=Path, help="soukromá badatelská složka mimo Git")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    archive = commands.add_parser("archive", help="import a místní kontrola archivních snímků")
+    archives = archive.add_subparsers(dest="archive_name", required=True)
+    mza_parser = archives.add_parser("mza", help="MZA: import bez sítě, živé stahování zakázáno")
+    mza_commands = mza_parser.add_subparsers(dest="mza_command", required=True)
+    mza_import = mza_commands.add_parser("import", help="nezměněná kopie snímku do sources/")
+    mza_import.add_argument("file", type=Path)
+    mza_import.add_argument("--url", required=True)
+    mza_import.add_argument(
+        "--method", default="manual_import",
+        choices=("browser_download", "archival_copy", "iiif_assembled", "screenshot", "manual_import"),
+    )
+    mza_import.add_argument("--reference", default="", help="skutečně doložená identifikace matriky")
+    mza_import.add_argument("--image-number", type=int, help="ověřené pořadové číslo snímku")
+    mza_import.add_argument("--digital-copy", choices=("unknown", "derived", "original"), default="unknown")
+    mza_import.add_argument("--provenance-note", default="", help="podklad pro označení originální digitální kopie")
+    mza_import.add_argument("--acquired-at", help="ISO čas získání s časovým pásmem; jinak čas importu")
+    mza_import.add_argument("--expected-revision", type=int)
+    mza_inspect = mza_commands.add_parser("inspect", help="místní metadata a duplicity, žádná síť")
+    mza_inspect.add_argument("--url", required=True)
+    mza_inspect.add_argument("--file", type=Path, help="volitelně porovnat SHA-256 místního souboru")
+    mza_download = mza_commands.add_parser("download", help="v této verzi vždy odmítne síťový přístup")
+    mza_download.add_argument("--url", required=True)
 
     project = commands.add_parser("project", help="životní cyklus badatelského projektu")
     project_commands = project.add_subparsers(dest="project_command", required=True)
