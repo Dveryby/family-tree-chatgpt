@@ -321,19 +321,24 @@ def _download(root, url, *, permission_file=None, reference="", image_number=Non
     output = directory / "scan.png"
     try:
         image = session.acquire(base + "/info.json", output)
-        image["live_mza_verified"] = transport is None
+        live_verified = transport is None or getattr(transport, "live_access_verifiable", False) is True
+        image["live_mza_verified"] = live_verified
         evidence = {key: permission[key] for key in (
             "basis", "statement", "recorded_at", "evidence_reference", "scope", "sha256", "min_interval_seconds"
         )}
+        extra = {"permission": evidence, "iiif": {
+            "info_url": base + "/info.json", "version": image["iiif_version"],
+            "request_count": session.count, "image_requests": image["image_requests"],
+            "live_access_verified": live_verified,
+        }}
+        browser_session = getattr(transport, "verified_browser_session", None)
+        if browser_session is not None:
+            extra["browser_session"] = browser_session
         result = mza.import_image(
             root, output, url, method="iiif_assembled", reference=reference,
             image_number=image_number, expected_revision=expected_revision,
             provenance_note="IIIF; souhlas potvrzen uživatelem: " + permission["evidence_reference"],
-            acquisition_extra={"permission": evidence, "iiif": {
-                "info_url": base + "/info.json", "version": image["iiif_version"],
-                "request_count": session.count, "image_requests": image["image_requests"],
-                "live_access_verified": transport is None,
-            }},
+            acquisition_extra=extra,
         )
         return {**result, "downloaded": True, "network_accessed": True,
                 "iiif": image, "request_count": session.count,

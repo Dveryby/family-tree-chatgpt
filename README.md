@@ -70,7 +70,11 @@ projektu.
   snímku; bez odhadování složek a záměny názvu JP2,
 - evidence souhlasu a IIIF průchodu ve stavu a ZIPu; zachování úplné kopie
   pro import při selhání zápisu stavu. Úspěšné živé stažení zatím neověřeno:
-  nový pokus po opravě detekce doložil aktivní Altcha gate a bezpečně skončil.
+  nový pokus po opravě detekce doložil aktivní Altcha gate a bezpečně skončil,
+- samostatný `archive mza browser-download`: uživatel otevře archiv, dokončí
+  ověření a potvrdí stažení jednoho snímku ve stejné browserové relaci.
+  Průchod je ověřen syntetickým archivem v Chrome; živé ruční ověření MZA
+  tím doložené není.
 
 ## Novinky ve verzi 0.5.0
 
@@ -218,6 +222,27 @@ Volitelné `--diagnostics-dir /private/mza-diagnostics-new` uloží odpovědi,
 HTTP stav, konkrétní důvod a SHA-256 do nové soukromé složky. Odkazy na
 skripty CAPTCHA/Altcha samy postup nezastaví; rozhodují ochranné HTML prvky.
 Citlivé hlavičky se neukládají a známá pole přístupových údajů se redigují.
+
+Pro ruční ověření v místním viditelném Chrome lze výslovně spustit samostatný
+režim. Do stejného prostředí Pythonu doplnit `requirements-browser.txt`
+(Playwright); základní `requirements.txt` s Pillow je potřeba také.
+
+```sh
+python3 -m pip install -r requirements.txt -r requirements-browser.txt
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research archive mza browser-download --url 'https://www.mza.cz/actapublica/matrika/detail/999999?image=synthetic-001.jp2'
+```
+
+V úvodní kartě kliknout na odkaz do archivu, dokončit jeho nativní ověření,
+vrátit se a potvrdit „Ověření je hotové — stáhnout jeden snímek“. Program
+ochranu neřeší ani na potvrzení nekliká. Obrazové požadavky provádí původní
+karta, v téže dočasné relaci; cookies se nečtou, neexportují ani nepřenášejí
+do jiného klienta. Po skončení se prohlížeč i relace zavřou. Výchozí čekání
+je 600 s, `--manual-timeout` dovoluje 5–1800 s. Pro Playwright Chromium
+použít `--browser-channel chromium` a nejprve `python3 -m playwright install chromium`.
+Režim vyžaduje místní grafické prostředí. Nová ochrana, blokace, ztráta karty,
+odmítnuté CORS nebo změna souhlasu stažení zastaví. Samostatný HTTP příkaz
+se na tento režim automaticky nepřepíná. Podrobnosti a hranice diagnostiky
+jsou v [postupu MZA](skills/family-tree-chatgpt/references/mza.md).
 
 Ukázková URL je syntetická; nahradit ji přesným ověřeným odkazem. Podle
 podkladu lze přidat `--reference`, `--image-number`, `--acquired-at` s časovým

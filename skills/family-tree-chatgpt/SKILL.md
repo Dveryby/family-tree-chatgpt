@@ -75,6 +75,13 @@ description: >-
    uložení v prohlížeči nebo oficiální kopii. Samotný příznak není oprávnění.
    Při ochraně, blokaci nebo nepodložené obrazové adrese skončit bez další
    síťové cesty. Potvrdit úspěch až po skutečném výsledku s ověřenými rozměry.
+   Pokud uživatel výslovně žádá ruční ověření v prohlížeči, použít samostatný
+   `archive mza browser-download --url <přesná-URL-s-image>` podle reference.
+   Uživatel sám otevře archiv, dokončí nativní ověření a v úvodní kartě
+   potvrdí pokračování. Na ochranu ani toto potvrzení automaticky neklikat,
+   Altcha neřešit. Zachovat původní kartu a BrowserContext; cookies nečíst,
+   neexportovat ani nepřenášet do HTTP klienta. Při nové výzvě, CORS nebo
+   ztrátě relace zastavit. Nezaměňovat syntetický browserový test za živý úspěch.
 2. Na „Importuj tuto kvalitní kopii matriky do našeho badatelského projektu“
    použít `scripts/family_tree.py --workspace <soukromá-složka> archive mza import
    <soubor> --url <skutečná-URL>`. Doplnit skutečně známou identifikaci

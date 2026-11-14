@@ -8,7 +8,7 @@
 - Projektové, modelové, GEDCOM a obrazové příkazy zůstávají offline. Pouze
   skupina `gramps` používá síť podle [samostatné reference](gramps.md);
   žádný příkaz neprovádí trvalé cloudové ukládání badatelského ZIPu.
-- `archive mza import/inspect` zůstávají offline. Pouze výslovný `download`
+- `archive mza import/inspect` zůstávají offline. Pouze výslovný `download` nebo `browser-download`
   používá síť se soukromě evidovaným souhlasem podle [reference MZA](mza.md).
 - Stabilní vstup je `scripts/family_tree.py`. Samostatné `research.py`,
   `gedcom.py`, `crop.py` a `image_review.py` zůstávají kvůli kompatibilitě,
@@ -143,7 +143,7 @@ v `source.reference` i metadatech. Obrazové deriváty nadále patří do `crops
 
 ## Evidence živého získání MZA (0.6.0)
 
-U živého získání má `source.acquisition` navíc dva nepovinné objekty:
+U živého získání má `source.acquisition` navíc nepovinné objekty:
 
 - `permission`: `basis: user_attestation`, `scope: single_image`, přesné
   uživatelské `statement`, `evidence_reference`, `recorded_at`, `sha256`
@@ -153,6 +153,12 @@ U živého získání má `source.acquisition` navíc dva nepovinné objekty:
   a `live_access_verified`. U mock testů je poslední hodnota vždy `false`.
   Skutečný síťový průchod ji nastaví až po získání úplného obrazu, ověření
   rozměrů a úspěšném importu. Neoznačuje genealogická tvrzení za ověřená.
+- `browser_session` pouze u ručně potvrzeného browserového toku:
+  `schema_version: 1`, náhodné neautentizační `session_id`, čas s pásmem
+  `manual_confirmed_at`, `same_browser_context: true`, `cookies_exported: false`,
+  `transport: browser_fetch` a `manual_request_count`. ID označuje místní
+  akvizici, není to cookie ani serverový token. Přítomnost vyžaduje i platné
+  `permission` a `iiif`. Nevypovídá o vizuální kontrole snímku.
 
 Tyto objekty vznikají ve stejné atomické změně jako záznam. `project check`
 kontroluje jejich strukturu; ZIP je přenese včetně soukromé citace souhlasu.
@@ -169,7 +175,7 @@ bez sítě. Případnou novou archivní verzi je nutné vybrat a posoudit výslo
 
 ## Soukromá diagnostika MZA
 
-Volitelné `archive mza download --diagnostics-dir <nová-složka>` ukládá
+Volitelné `archive mza download/browser-download --diagnostics-dir <nová-složka>` ukládá
 `response-0001.html/json/bin`, odpovídající `response-0001.metadata.json`
 a souhrnný `attempt.json`. Metadata obsahují URL, HTTP stav, omezenou sadu
 hlaviček, klasifikaci odpovědi, rozpoznané prvky, velikost a SHA-256 přijatého
@@ -182,6 +188,9 @@ umístění je mimo `sources/`, `crops/` a `history/`; pak ji existující ZIP e
 nezahrne. Při `active_challenge` se zachová odpověď a přesný důvod, ale nevzniká
 import ani vizuální ověření. U některých transportních chyb před přijetím celé
 odpovědi může být dostupný pouze souhrn chyby, nikoli tělo.
+Browserový režim zachycuje pouze kontrolované získání po ručním potvrzení,
+nikoli nativní ověřovací provoz. Těla již mohou být HTTP rozbalená prohlížečem.
+Cookies, úložiště prohlížeče a ověřovací payload se neexportují ani do ZIPu.
 
 ## Výřez
 

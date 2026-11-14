@@ -521,3 +521,75 @@ včetně automatického widgetu o velikosti 1 px a widgetu za prvních 64 KiB HT
 Dále rozlišení HTML místo IIIF, zachování autoritativního HTTP stavu i při
 vadném HTML, uložení diagnostiky před chybou, redakce citlivých polí a odmítnutí
 přepsání či uložení do Git. Verze zůstává 0.6.0 jako oprava dosud nevydaného PR.
+
+## Ruční browserová relace pro jeden snímek, 14. listopadu 2026
+
+Do dosud nevydaného PR #16 doplněn samostatný příkaz
+`archive mza browser-download`. Volitelný Playwright 1.65.2 spouští viditelný
+Chrome/Chromium v nové dočasné relaci. Uživatel sám otevře odkaz z místní
+úvodní karty, dokončí nativní ověření archivu a klikne na pokračování.
+Implementace nepočítá Altcha, nepřebírá ověřovací payload, nekliká na výzvu
+ani uživatelovo potvrzení. Nativní ověřovací GET/POST smí odeslat jen stránka
+archivu před potvrzením; po něm jsou tyto operace blokované.
+
+Kontrolované GET detailu, metadat a obrazu běží pomocí streamovaného `fetch`
+v původní kartě a stejném BrowserContext. Cookies zpracovává browser;
+neexportují se, nečtou se a nepřenášejí se do HTTP klienta. Nepoužívá se
+Playwright `context.request`, persistentní profil ani cookie soubor.
+Zachována kontrola TLS, veřejných IP a DNS pinning, vypnuty proxy, service
+workers a WebSockety. Změna souhlasu, blokace, přesměrování, nová ochrana,
+CORS nebo ztráta karty/relace operaci zastaví bez jiného klienta.
+
+Platí stejná kontrola IIIF 2/3, omezení přenosu, rozměrů, počtu požadavků,
+úplnosti a atomického importu. Prohlížeč sám rozbaluje HTTP kompresi;
+velikost se kontroluje na rozbaleném toku. Browserový režim používá stejný
+globální zámek jako HTTP režim. `source.acquisition.browser_session` uchová
+neautentizační ID akvizice, čas ručního potvrzení a údaje o zachování relace
+bez cookies; strukturu kontroluje `project check` a zachová ji ZIP.
+Záznam zůstává `unread`, bez vizuální kontroly a podpořených tvrzení.
+Volitelná diagnostika zaznamenává pouze kontrolované získání po potvrzení,
+nikoli ověřovací provoz nebo obsah browserového úložiště.
+
+### Skutečně provedené testy
+
+Závěrečná sada s předepsaným Pillow a zapnutým testem skutečného browseru:
+
+```sh
+FAMILY_TREE_BROWSER_TEST=1 python3 -m unittest discover -s tests -v
+```
+
+**132 testů, 23,985 s, OK**, bez přeskočení. Prostředí: Python 3.13.5,
+Pillow 13.0.0, Playwright 1.65.2, místní Google Chrome 154.0.8037.57.
+Test browseru vyžaduje grafické prostředí; bez `FAMILY_TREE_BROWSER_TEST=1`
+se čtyři browserové testy výslovně přeskočí, ostatní nevyžadují Playwright.
+
+Nových je 14 testů: 10 jednotkových a čtyři s viditelným Chrome. Syntetický
+archiv je celý obsloužen lokálním Playwright routingem; žádný jeho požadavek
+se neposílá na produkční MZA. Syntetická stránka a její testovací ovládání
+nejsou kopií ani automatizovaným řešením skutečné Altcha výzvy.
+
+- Předčasné potvrzení při přítomném widgetu nepropustilo stažení. Po kliknutí
+  na syntetické ovládání stránka nastavila HttpOnly session cookie a reloadovala.
+  Kontrolované požadavky ji browser sám připojil; fixture ji ověřila na straně
+  simulovaného serveru. Produktový kód ji nečetl.
+- Ve stejné kartě/relaci úspěšně proběhl API 2 celý JPEG i API 3 sestava
+  12 dlaždic. Výsledkem je pouze syntetický obraz **517 × 389 px**;
+  `live_access_verified` zůstalo `false`.
+- Skutečný Chrome odmítl CORS s jiným povoleným originem. HTTP 403 zastavilo
+  získání bez nových požadavků, jiného klienta, importu nebo změny revize.
+- Zrušení, timeout a zavření úvodní karty skončily chybou. Veřejný browserový
+  vstup byl samostatně spuštěn a zrušen před sítí; zavřel kontext i prohlížeč
+  a uložil souhrn diagnostiky s nulou odpovědí.
+- Jednotkově ověřeny přesná URL a původní frame, blokace předběžného vieweru,
+  povolení nativního ověřování pouze v ruční fázi, odvolání souhlasu, veřejné
+  DNS, stavové zákazy, změna/zavření karty nebo kontextu, částečný timeout
+  započtený do přenosu, chybná/velká data a odmítnutí fallback klienta.
+- Export/obnova zachovaly browserovou provenienci; poškozená metadata se
+  odmítla. Duplicitní URL a neplatný vstup neotevřely prohlížeč.
+
+**Nový živý průchod s ručním ověřením MZA nebyl proveden.** Posledním
+produkčním důkazem zůstává výše popsaná uložená Altcha brána z 09:27:52 SEČ.
+Funkčnost produkčního credentialed CORS, získání plného obrazu a jeho
+skutečné rozměry čekají na ruční akceptaci. PR zůstává draft.
+Změny obsahují pouze obecný kód, dokumentaci a syntetické testy; skutečné
+odpovědi, souhlas, cookies ani snímky nejsou součástí repozitáře.

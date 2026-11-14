@@ -176,7 +176,16 @@ def execute(args):
     if args.command == "archive":
         import mza
 
-        if args.mza_command == "download":
+        if args.mza_command in ("download", "browser-download"):
+            if args.mza_command == "browser-download":
+                import mza_browser
+
+                return mza_browser.download(
+                    require_workspace(args), args.url, permission_file=args.permission_file,
+                    diagnostics_dir=args.diagnostics_dir, reference=args.reference,
+                    image_number=args.image_number, expected_revision=args.expected_revision,
+                    manual_timeout=args.manual_timeout, browser_channel=args.browser_channel,
+                )
             return mza.download(
                 args.url, args.workspace, permission_file=args.permission_file,
                 diagnostics_dir=args.diagnostics_dir,
@@ -293,6 +302,15 @@ def build_parser():
     mza_download.add_argument("--reference", default="")
     mza_download.add_argument("--image-number", type=int)
     mza_download.add_argument("--expected-revision", type=int)
+    browser_download = mza_commands.add_parser("browser-download", help="ruční ověření v prohlížeči a jeden snímek ve stejné relaci")
+    browser_download.add_argument("--url", required=True)
+    browser_download.add_argument("--permission-file", type=Path)
+    browser_download.add_argument("--diagnostics-dir", type=Path)
+    browser_download.add_argument("--reference", default="")
+    browser_download.add_argument("--image-number", type=int)
+    browser_download.add_argument("--expected-revision", type=int)
+    browser_download.add_argument("--manual-timeout", type=float, default=600)
+    browser_download.add_argument("--browser-channel", choices=("chrome", "chromium"), default="chrome")
 
     project = commands.add_parser("project", help="životní cyklus badatelského projektu")
     project_commands = project.add_subparsers(dest="project_command", required=True)

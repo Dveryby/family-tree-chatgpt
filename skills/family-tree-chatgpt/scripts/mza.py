@@ -140,6 +140,19 @@ def validate_acquisition(value, source, root, verify_hashes=False):
                     or type(iiif.get("image_requests")) is not int or not 1 <= iiif["image_requests"] <= iiif["request_count"] - 2
                     or type(iiif.get("live_access_verified")) is not bool):
                 raise ValueError("Neplatná metadata živého IIIF přístupu.")
+        if "browser_session" in value:
+            session = value["browser_session"]
+            if (not isinstance(session, dict) or type(session.get("schema_version")) is not int or session["schema_version"] != 1
+                    or not isinstance(session.get("session_id"), str)
+                    or not re.fullmatch(r"[0-9a-f]{32}", session["session_id"])
+                    or session.get("transport") != "browser_fetch"
+                    or session.get("same_browser_context") is not True
+                    or session.get("cookies_exported") is not False
+                    or type(session.get("manual_request_count")) is not int
+                    or not 1 <= session["manual_request_count"] <= MAX_REQUESTS
+                    or datetime.fromisoformat(session["manual_confirmed_at"]).tzinfo is None
+                    or "permission" not in value or "iiif" not in value):
+                raise ValueError("Neplatná evidence ručně ověřené browserové relace.")
     except (ValueError, TypeError, KeyError) as exc:
         return [f"source.acquisition: {exc}"]
     return []
@@ -195,7 +208,7 @@ def import_image(root, path, url, *, method="manual_import", reference="", image
                 **info, "size_bytes": size, "sha256": digest,
             }
             if acquisition_extra is not None:
-                if not isinstance(acquisition_extra, dict) or set(acquisition_extra) - {"permission", "iiif"}:
+                if not isinstance(acquisition_extra, dict) or set(acquisition_extra) - {"permission", "iiif", "browser_session"}:
                     raise ValueError("Nepovolená dodatečná metadata získání snímku.")
                 metadata.update(deepcopy(acquisition_extra))
             record = {

@@ -60,7 +60,7 @@ evidence oprávnění. `--file` porovná i SHA-256. Stav `download_allowed: true
 neznamená otevřenou relaci ani úspěšný živý průchod. Již uloženou přesnou URL
 `download` znovu nestahuje. Import sám nevytváří vizuální ověření ani tvrzení.
 
-## Živý průchod a šetrnost
+## Živý průchod HTTP a šetrnost
 
 1. Ověřit soukromý souhlas, workspace, revizi a URL jednoho konkrétního snímku.
 2. Načíst pouze veřejný detail. Při aktivním HTML prvku CAPTCHA/Altcha, 401/403/429 nebo jakémkoli
@@ -94,6 +94,58 @@ Limity: 2048 požadavků včetně detailu, metadat a opakování, 128 MiB přeno
 se čte omezeně; velikost se kontroluje i bez Content-Length. Nepodporované
 komprimované HTTP odpovědi se odmítají. Po blokaci nejsou další požadavky.
 
+## Ruční ověření ve stejné browserové relaci
+
+Samostatný `archive mza browser-download` je určen pro výslovný požadavek
+na ruční ověření. Vyžaduje stejnou soukromou evidenci souhlasu, Pillow,
+volitelné `requirements-browser.txt` a viditelný místní Chrome. Instalovat
+do zvoleného prostředí Pythonu ze složky skillu:
+
+```sh
+python3 -m pip install -r requirements.txt -r requirements-browser.txt
+python3 scripts/family_tree.py --workspace /private/research archive mza browser-download --url 'https://www.mza.cz/actapublica/matrika/detail/999999?image=synthetic-001.jp2' --manual-timeout 600
+```
+
+1. Program otevře místní úvodní kartu v nové dočasné relaci. Uživatel sám
+   klikne na odkaz do archivu. Osobní profil ani dříve uložené cookies se nepoužijí.
+2. V kartě archivu uživatel dokončí nativní ověření. Povoleny jsou skripty
+   archivu a jeho vlastní GET `altcha/challenge` a POST `altcha/verify`.
+   Program tyto požadavky nevytváří, nepočítá odpověď Altcha, nepřebírá payload
+   ani na ovládání výzvy nekliká. Předběžné načítání obrazů prohlížečem je blokované.
+3. Uživatel se vrátí do úvodní karty a klikne na „Ověření je hotové — stáhnout
+   jeden snímek“. Musí existovat právě jedna karta s přesně vybraným snímkem
+   a bez rozpoznané aktivní výzvy. Předčasné potvrzení vyzve k dokončení;
+   samo žádné další ověření ani stažení nespustí.
+4. Detail, `info.json` a jeden celý obraz nebo jeho nutné dlaždice se načítají
+   pomocí `fetch` uvnitř původní karty se stejným BrowserContext. Nativní
+   browser zpracuje vlastní cookies; aplikace je nečte ani neukládá.
+   Nepoužívá se `context.request`, export cookies, osobní profil ani nový HTTP klient.
+   Metadata a obraz procházejí stejným IIIF ověřením, limity a importem jako výše.
+
+Chrome ověřuje TLS a používá připnuté veřejné IP a přímé spojení. Service
+workers a WebSockety jsou vypnuté. Souhlas se kontroluje i před nativními
+požadavky během ruční části. Po ručním potvrzení jsou povoleny pouze jednotlivé
+plánované GET z původní karty; nové ověřovací POST ani provoz prohlížeče
+na pozadí nejsou povoleny. HTTP 401/403/429, přesměrování, nová výzva,
+zavření nebo změna ověřené karty/relace operaci zastaví. CORS se respektuje:
+pokud server nepovolí credentialed fetch z archivu na obrazový server,
+stažení skončí bez přepnutí klienta nebo vypnutí ochrany prohlížeče.
+
+Limity IIIF platí pro kontrolované získání po potvrzení; nativní stránka
+před potvrzením může načíst své skripty a styly. Browser má navíc společný
+strop 2048 povolených požadavků. HTTP kompresi rozbaluje Chrome; limit se
+kontroluje i na skutečně rozbaleném toku. Odstup souhlasu se vztahuje na
+sekvenční získání obrazu, nikoli souběžné načítání běžných zdrojů stránky.
+Prohlížeč se po úspěchu, chybě, zrušení nebo timeoutu zavře a relace se
+neexportuje. Výchozí timeout ruční části je 600 s, rozsah 5–1800 s.
+`--browser-channel chromium` vybere Playwright Chromium, předem instalovaný
+pomocí `python3 -m playwright install chromium`. Headless režim není dostupný.
+
+HTTP downloader zůstává samostatný a na browserový režim se nepřepíná.
+Tento browserový průchod byl ověřen pouze v Chrome proti syntetickému archivu
+s HttpOnly session cookie, včetně celého obrazu a dlaždic. Úspěšné ruční
+ověření a následné plné stažení z produkčního MZA zatím ověřené není.
+
 ## Import, metadata a skutečně ověřený stav
 
 Import přijímá jeden JPEG, PNG, TIFF nebo JP2 podporovaný místním Pillow,
@@ -115,7 +167,7 @@ v 09:27:52 SEČ uložilo HTTP 200, 22 826 bajtů HTML a doložilo skutečný prv
 `altcha-widget` s `auto` a `challenge` uvnitř `altcha-gate`. Widget je úmyslně
 veliký jen 1 × 1 px; jde o aktivní automatické ověření, nikoli pouhý odkaz na
 skript. Kód stránky po události `verified` požaduje serverové ověření a reload.
-Downloader tento kód nespouští. Byl proveden právě jeden HTTP požadavek;
+Samostatný HTTP downloader tento kód nespouští. Byl proveden právě jeden HTTP požadavek;
 žádný ověřovací POST, info.json ani dlaždice se neposílaly. Úspěšné živé stažení ani skutečné plné rozlišení se zatím netvrdí.
 Offline testy ověřují stejný průchod přes mock HTTPS. Dřívější skutečný pilot
 z 11. listopadu zachoval jen browserový screenshot 1078 × 1034 px.
@@ -123,7 +175,8 @@ Další důkazy a omezení jsou v `../../../docs/VALIDATION.md`.
 
 ## Diagnostika a rozlišení chyb
 
-`download --diagnostics-dir <nová-soukromá-složka>` je výslovně volitelný.
+`download` i `browser-download` přijímají volitelné
+`--diagnostics-dir <nová-soukromá-složka>`.
 Pro každou odpověď uloží tělo, povolené hlavičky (typ, délku, datum, Retry-After),
 HTTP stav, klasifikaci, konkrétní rozpoznané prvky a SHA-256 přijatých i uložených
 bajtů. Zapisuje s právy 0600, odmítá Git, symlinky a přepsání existující složky.
@@ -132,10 +185,16 @@ redigována a případná změna těla je označena. Soubory uchovat soukromě, 
 V diagnostickém režimu se omezeně přečte i tělo chybové odpovědi, bez následování
 přesměrování či dalšího požadavku. `attempt.json` uchová přesný výsledek pokusu.
 
+V browserovém režimu se zachycují pouze celé odpovědi kontrolovaného získání
+po ručním potvrzení. Nativní ověřovací komunikace, cookies, payload Altcha,
+profil ani úvodní DOM se neukládají. Při CORS/síťové chybě nebo nedokončeném
+ručním ověření může souhrn obsahovat jen typ chyby bez těla odpovědi.
+Browserová těla jsou bajty po HTTP rozbalení prohlížečem.
+
 Detekce čte strukturu HTML: widget nebo ochranný formulář, ne samotná slova
 v textu, komentářích, odkazech, skriptech či stylech. Šablony a explicitně
 skryté části se ignorují; automatický widget o velikosti 1 px je stále aktivní.
-Není to prohlížeč: nevyhodnocuje JavaScript ani externí CSS. Klasifikace
+Samotný detektor nevyhodnocuje JavaScript ani externí CSS. Klasifikace
 `active_challenge`, `http_401/403/429`, `redirect`, `unexpected_html` a
 `html_parse_error` mají oddělené významy. HTML místo IIIF není automaticky
 důkaz CAPTCHA. Jakákoli taková chyba ukončí relaci bez další síťové cesty.
