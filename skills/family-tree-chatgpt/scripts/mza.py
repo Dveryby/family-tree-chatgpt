@@ -1,8 +1,4 @@
-"""Private MZA image import and deliberately offline IIIF test adapter.
-
-No production HTTP client is included. The only IIIF transport is injected by
-tests and is restricted to a reserved .invalid host; it must not follow redirects.
-"""
+"""Private image import and IIIF assembly; authorized live transport in mza_live."""
 from copy import deepcopy
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -28,7 +24,7 @@ MAX_TRANSFER_BYTES = 128 * 1024 * 1024
 METHODS = ("browser_download", "archival_copy", "iiif_assembled", "screenshot", "manual_import")
 FORMATS = {"JPEG": ".jpg", "PNG": ".png", "TIFF": ".tif", "JPEG2000": ".jp2"}
 BLOCK_REASON = (
-    "Automatické stahování MZA není povoleno: oprávnění pro IIIF nebylo doloženo. "
+    "Automatické stahování MZA není povoleno bez soukromé evidence souhlasu pro IIIF. "
     "Použij uložení v archivním prohlížeči nebo oficiální kopii od archivu a archive mza import."
 )
 
@@ -121,6 +117,28 @@ def validate_acquisition(value, source, root, verify_hashes=False):
             raise ValueError("Neplatná cesta importovaného snímku.")
         if verify_hashes and research.asset(root, source["file"]).stat().st_size != value["size_bytes"]:
             raise ValueError("Velikost souboru nesouhlasí s metadaty.")
+        if "permission" in value or "iiif" in value:
+            permission, iiif = value["permission"], value["iiif"]
+            if (not isinstance(permission, dict) or not isinstance(iiif, dict)
+                    or value["method"] != "iiif_assembled" or permission.get("basis") != "user_attestation"
+                    or permission.get("scope") != "single_image"):
+                raise ValueError("Neplatná evidence oprávnění živého IIIF.")
+            for field in ("statement", "evidence_reference"):
+                if not isinstance(permission.get(field), str) or not permission[field].strip():
+                    raise ValueError("Chybí podklad souhlasu pro IIIF.")
+            if (not isinstance(permission.get("sha256"), str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", permission["sha256"])
+                    or datetime.fromisoformat(permission["recorded_at"]).tzinfo is None):
+                raise ValueError("Neplatný otisk nebo čas evidence souhlasu.")
+            import mza_live
+
+            mza_live.live_url(iiif["info_url"])
+            if (not iiif["info_url"].endswith("/info.json")
+                    or type(iiif.get("version")) is not int or iiif["version"] not in (2, 3)
+                    or type(iiif.get("request_count")) is not int or not 3 <= iiif["request_count"] <= MAX_REQUESTS
+                    or type(iiif.get("image_requests")) is not int or not 1 <= iiif["image_requests"] <= iiif["request_count"] - 2
+                    or type(iiif.get("live_access_verified")) is not bool):
+                raise ValueError("Neplatná metadata živého IIIF přístupu.")
     except (ValueError, TypeError, KeyError) as exc:
         return [f"source.acquisition: {exc}"]
     return []
@@ -128,7 +146,7 @@ def validate_acquisition(value, source, root, verify_hashes=False):
 
 def import_image(root, path, url, *, method="manual_import", reference="", image_number=None,
                  digital_copy="unknown", provenance_note="", acquired_at=None,
-                 expected_revision=None):
+                 expected_revision=None, acquisition_extra=None):
     root = research.private_workspace(root)
     archive_url(url)
     original = Path(path).expanduser()
@@ -175,6 +193,10 @@ def import_image(root, path, url, *, method="manual_import", reference="", image
                 "method": method, "digital_copy": digital_copy, "provenance_note": provenance_note,
                 **info, "size_bytes": size, "sha256": digest,
             }
+            if acquisition_extra is not None:
+                if not isinstance(acquisition_extra, dict) or set(acquisition_extra) - {"permission", "iiif"}:
+                    raise ValueError("Nepovolená dodatečná metadata získání snímku.")
+                metadata.update(deepcopy(acquisition_extra))
             record = {
                 "id": key, "source": {
                     "archive": metadata["archive"], "reference": reference,
@@ -226,10 +248,19 @@ def import_image(root, path, url, *, method="manual_import", reference="", image
                 published.unlink()
 
 
-def inspect(url, root=None, path=None):
+def inspect(url, root=None, path=None, *, permission_file=None):
     archive_url(url)
     result = {"url": url, "network_accessed": False, "download_allowed": False,
               "reason": BLOCK_REASON, "matches": []}
+    import mza_live
+
+    try:
+        permission = mza_live.load_permission(permission_file)
+    except (ValueError, OSError):
+        pass
+    else:
+        result.update(download_allowed=True, permission_basis=permission["basis"],
+                      reason="Živý režim je dostupný na základě uživatelského potvrzení souhlasu; přístup k serveru zatím neověřen.")
     digest = None
     if path is not None:
         path = Path(path).expanduser()
@@ -257,9 +288,12 @@ def inspect(url, root=None, path=None):
     return result
 
 
-def download(url):
-    archive_url(url)
-    raise ValueError(BLOCK_REASON)
+def download(url, root=None, **options):
+    if root is None:
+        raise ValueError(BLOCK_REASON + " Vyžadován je také --workspace.")
+    import mza_live
+
+    return mza_live.download(root, url, **options)
 
 
 def test_service_url(url):
@@ -272,7 +306,7 @@ def test_service_url(url):
     return url
 
 
-def parse_info(info):
+def parse_info(info, validator=test_service_url):
     if not isinstance(info, dict):
         raise ValueError("IIIF info.json musí být objekt.")
     context = info.get("@context", [])
@@ -290,7 +324,7 @@ def parse_info(info):
     base = info.get("@id" if version == 2 else "id")
     if not isinstance(base, str):
         raise ValueError("Chybí identifikátor obrazové služby.")
-    test_service_url(base)
+    validator(base)
     width, height = dimensions(info.get("width"), info.get("height"))
     profiles = info.get("profile")
     profiles = profiles if isinstance(profiles, list) else [profiles]
@@ -352,20 +386,17 @@ def parse_info(info):
             "requests": requests}
 
 
-class OfflineIIIF:
-    """Exercise IIIF with a mock transport returning (status, headers, bytes).
+class IIIFSession:
+    """Bounded sequential IIIF session; redirects and challenges always stop it."""
 
-    There is deliberately no default transport, live endpoint or enabling flag.
-    The injected transport must perform no network I/O and follow no redirects.
-    """
-
-    def __init__(self, transport, *, sleep=time.sleep):
+    def __init__(self, transport, *, sleep=time.sleep, validator=test_service_url, interval=2):
         self.transport, self.sleep = transport, sleep
+        self.validator, self.interval = validator, interval
         self.stopped = False
         self.count = self.transferred = 0
 
-    def get(self, url, limit):
-        test_service_url(url)
+    def get(self, url, limit, *, allow_html=False):
+        self.validator(url)
         if self.stopped:
             raise ValueError("IIIF relace byla zastavena; další požadavky jsou zakázány.")
         for attempt in range(2):
@@ -373,7 +404,7 @@ class OfflineIIIF:
                 self.stopped = True
                 raise ValueError("Překročen limit počtu požadavků.")
             if self.count:
-                self.sleep(2)  # Test policy only; no MZA rate has been authorized.
+                self.sleep(self.interval)
             self.count += 1
             try:
                 status, headers, body = self.transport(url, timeout=15, max_bytes=limit)
@@ -387,9 +418,11 @@ class OfflineIIIF:
             if len(body) > limit or self.transferred > MAX_TRANSFER_BYTES:
                 self.stopped = True
                 raise ValueError("Překročen limit přenosu.")
+            protection_probe = body.lower() if allow_html else body[:65536].lower()
             if (status in (401, 403, 429) or 300 <= status < 400
-                    or "text/html" in headers.get("content-type", "").lower()
-                    or any(word in body[:4096].lower() for word in (b"captcha", b"altcha", b"<html"))):
+                    or (not allow_html and "text/html" in headers.get("content-type", "").lower())
+                    or any(word in protection_probe for word in (b"captcha", b"altcha"))
+                    or (not allow_html and b"<html" in body[:4096].lower())):
                 self.stopped = True
                 raise ValueError(f"HTTP {status}: ochrana, blokace nebo přesměrování; zastaveno.")
             if status in (500, 502, 503, 504) and attempt == 0:
@@ -423,7 +456,7 @@ class OfflineIIIF:
         if not isinstance(info_url, str) or not info_url.endswith("/info.json"):
             raise ValueError("Očekáván info.json jednoho testovacího obrazu.")
         try:
-            info = parse_info(json.loads(self.get(info_url, 1024 * 1024)))
+            info = parse_info(json.loads(self.get(info_url, 1024 * 1024)), self.validator)
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise ValueError("Neplatný IIIF JSON.") from exc
         if info["base"] + "/info.json" != info_url:
@@ -451,4 +484,12 @@ class OfflineIIIF:
                 staged.unlink(missing_ok=True)
         return {**details, "method": "iiif_assembled", "digital_copy": "derived",
                 "sha256": research.sha256(output), "size_bytes": output.stat().st_size,
-                "image_requests": len(info["requests"]), "live_mza_verified": False}
+                "image_requests": len(info["requests"]), "iiif_version": info["version"],
+                "live_mza_verified": False}
+
+
+class OfflineIIIF(IIIFSession):
+    """Mock-only compatibility adapter restricted to the reserved .invalid host."""
+
+    def __init__(self, transport, *, sleep=time.sleep):
+        super().__init__(transport, sleep=sleep)

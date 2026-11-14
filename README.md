@@ -2,11 +2,11 @@
 
 Český genealogický asistent pro ChatGPT. Projekt připravuje převod postupů a nástrojů z [sarsonj/rodokmen-skill](https://github.com/sarsonj/rodokmen-skill) do prostředí ChatGPT.
 
-Aktuální verze: **0.5.0** (14. listopadu 2026).
+Aktuální verze: **0.6.0** (14. listopadu 2026).
 
 ## Stav
 
-Verze 0.5.0, připravená 14. listopadu 2026. Obsahuje převedený
+Verze 0.6.0, připravená 14. listopadu 2026. Obsahuje převedený
 pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
 pramenů s historií. Ověřen je lokální export a obnova úplného stavu přes ZIP
 s kontrolními součty. Živý přístup a práce s jedním snímkem byly ověřeny pro
@@ -59,6 +59,18 @@ projektu.
   zajištění tagu `ToDo`,
 - opakovaný push bez duplicit a bez přepisování stavu, priority, titulu nebo
   popisu, které uživatel následně upravil v Gramps Web.
+
+## Novinky ve verzi 0.6.0
+
+- živý příkaz `archive mza download` pro jeden přesně určený snímek na základě
+  soukromě evidovaného uživatelského potvrzení souhlasu MZA s IIIF,
+- TLS, kontrola domén a veřejných IP adres s připnutím DNS výsledku, sekvenční
+  požadavky, limity a okamžité zastavení při blokaci nebo ochranné výzvě,
+- převzetí pouze přesného obrazového zdroje zveřejněného na stránce vybraného
+  snímku; bez odhadování složek a záměny názvu JP2,
+- evidence souhlasu a IIIF průchodu ve stavu a ZIPu; zachování úplné kopie
+  pro import při selhání zápisu stavu. Úspěšné živé stažení zatím neověřeno:
+  první skutečný pokus zachytil ochranný obsah a bezpečně skončil.
 
 ## Novinky ve verzi 0.5.0
 
@@ -176,9 +188,9 @@ python3 skills/family-tree-chatgpt/scripts/family_tree.py image split /soukrome-
 
 Nejprve získat jednu kopii oprávněnou cestou. [Nápověda MZA](https://www.mza.cz/actapublica/page/view/napoveda)
 uvádí uložení prohlížečem do 2000 bodů na delší straně a kvalitnější kopii
-na vyžádání od archivu. Povolení automatického IIIF nebylo doloženo při
-kontrole 14. listopadu 2026. `archive mza download --url …` proto vždy odmítne
-síťový přístup. Podrobnosti a podklady: [postup MZA](skills/family-tree-chatgpt/references/mza.md).
+na vyžádání od archivu. Veřejné podklady samy nedokládají obecné povolení automatického IIIF.
+Verze 0.6.0 umožňuje živý režim pouze se soukromou evidencí souhlasu, který
+uživatel výslovně potvrdí; program pravost souhlasu nezávisle neposuzuje. Podrobnosti a podklady: [postup MZA](skills/family-tree-chatgpt/references/mza.md).
 
 ```sh
 # Projekt založit jen jednou; všechny soubory zůstávají mimo Git.
@@ -187,6 +199,21 @@ python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/r
 python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research archive mza inspect --url 'https://www.mza.cz/actapublica/matrika/detail/999999?image=synthetic-001.jp2'
 python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research project export /private/research-transfer.zip
 ```
+
+Pro živé získání jednoho snímku nejprve evidovat skutečně získaný souhlas MZA
+v soukromém souboru `~/.config/family-tree-chatgpt/mza-permission.json`
+(případně pod `XDG_CONFIG_HOME`). Formát a hranice popisuje
+[postup MZA](skills/family-tree-chatgpt/references/mza.md). Není to univerzální
+povolení archivu a samotný příznak CLI nestačí.
+
+```sh
+python3 skills/family-tree-chatgpt/scripts/family_tree.py --workspace /private/research archive mza download --url 'https://www.mza.cz/actapublica/matrika/detail/999999?image=synthetic-001.jp2'
+```
+
+Volitelné `--permission-file /private/mza-permission.json` určí jiný soukromý
+záznam souhlasu. Při CAPTCHA/Altcha, 401/403/429 nebo přesměrování operace
+skončí; nepřepíná na jiný klient nebo endpoint. Automatické řešení ochrany,
+dávkové stahování, cookie import a autentizace nejsou podporované.
 
 Ukázková URL je syntetická; nahradit ji přesným ověřeným odkazem. Podle
 podkladu lze přidat `--reference`, `--image-number`, `--acquired-at` s časovým

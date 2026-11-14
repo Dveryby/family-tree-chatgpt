@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[1]
 SKILL = Path(os.environ.get("FAMILY_TREE_SKILL", REPO / "skills/family-tree-chatgpt"))
 sys.path.insert(0, str(SKILL / "scripts"))
 import mza
+import mza_live
 import research
 
 URL = "https://www.mza.cz/actapublica/matrika/detail/999999?image=synthetic-001.jp2"
@@ -77,6 +78,9 @@ class MZAImportTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
+        self.permission_patch = patch.object(mza_live, "DEFAULT_PERMISSION_FILE", self.base / "missing-permission.json")
+        self.permission_patch.start()
+        self.addCleanup(self.permission_patch.stop)
         self.root = self.base / "private"
         research.initialize(self.root)
         self.scan = self.base / "synthetic.png"

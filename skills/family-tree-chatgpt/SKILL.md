@@ -4,7 +4,7 @@ description: >-
   Český genealogický pracovní postup pro čtení jednoho matričního zápisu,
   přepis a překlad snímku, evidenci pramenů, posouzení totožnosti osob,
   správu osob, vztahů, tvrzení a konfliktů, import neověřených GEDCOM tvrzení,
-  import jednotlivých snímků MZA s původem a kontrolou integrity
+  import a oprávněné získání jednotlivých snímků MZA s původem a kontrolou integrity
   a jednosměrný export podporovaných tvrzení do Gramps Web. Použij
   při dotazech na rodokmen, předky a matriky, pokud uživatel dodá snímek, odkaz,
   GEDCOM nebo existující badatelský stav. Nezajišťuje automatické procházení
@@ -53,8 +53,8 @@ description: >-
    použít je; pro interaktivní prohlížeč dodržet jeho aktuální instrukce.
    Nevymýšlet názvy nástrojů a nepředpokládat přítomnost Playwrightu.
 3. Pro Opavu přečíst [postup a omezení](references/opava.md), pro MZA
-   [samostatný postup](references/mza.md). Automatické stahování MZA je zakázané;
-   dostupný je import oprávněně získaného místního snímku.
+   [samostatný postup](references/mza.md). Živý režim vyžaduje soukromě evidované
+   výslovné potvrzení souhlasu MZA pro IIIF; jinak použít místní import.
 4. Před čtením ověřit na stránce archiv, fond/sbírku, signaturu, obec/farnost,
    rozsah let, druh knihy, stranu a číslo snímku. Rozlišovat rok knihy a rok události.
 5. Zapsat citaci a přesný skutečně zjištěný odkaz. Chybějící údaj označit jako chybějící.
@@ -67,9 +67,14 @@ description: >-
 
 1. Na požadavek „Stáhni snímek 167 z matriky Blansko č. 56 v nejvyšším
    dostupném rozlišení“ přečíst [referenci MZA](references/mza.md). Nevymýšlet
-   URL ani zaměňovat interní ID detailu za číslo knihy. V této verzi přímé
-   stahování neprovádět: nebylo doloženo povolení IIIF. Nabídnout podporované
-   uložení jednoho snímku v prohlížeči nebo objednání kvalitnější kopie u MZA.
+   URL ani zaměňovat interní ID detailu za číslo knihy. Pokud uživatel výslovně
+   potvrdí souhlas MZA pro IIIF, uložit jeho potvrzení jako `user_attestation`
+   do soukromého nastavení podle reference; nevydávat je za nezávisle ověřený
+   dokument ani obecné povolení archivu. Použít `archive mza download --url
+   <přesná-URL-s-image>` se soukromým `--workspace`. Bez souhlasu nabídnout
+   uložení v prohlížeči nebo oficiální kopii. Samotný příznak není oprávnění.
+   Při ochraně, blokaci nebo nepodložené obrazové adrese skončit bez další
+   síťové cesty. Potvrdit úspěch až po skutečném výsledku s ověřenými rozměry.
 2. Na „Importuj tuto kvalitní kopii matriky do našeho badatelského projektu“
    použít `scripts/family_tree.py --workspace <soukromá-složka> archive mza import
    <soubor> --url <skutečná-URL>`. Doplnit skutečně známou identifikaci
@@ -78,7 +83,8 @@ description: >-
 3. Na „Ověř, jestli máme tento snímek už uložený, a zobraz jeho rozlišení“
    použít `archive mza inspect --url <URL>` se soukromým `--workspace`.
    Volitelné `--file <soubor>` porovná i SHA-256. Kontrola je místní a bez sítě;
-   nezjišťuje dostupné rozlišení na serveru.
+   nezjišťuje dostupné rozlišení na serveru. Stav oprávnění neznamená
+   úspěšně ověřené spojení.
 4. Import zachová bajty ve `sources/`, založí `unread` záznam a uloží metadata
    přímo do badatelského stavu. Nevytváří podpořená tvrzení ani vizuální ověření.
    Opakování stejného importu nemění přepis ani revizi. Stejná URL s jinými

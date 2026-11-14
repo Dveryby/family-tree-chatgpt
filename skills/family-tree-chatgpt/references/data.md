@@ -6,10 +6,10 @@
 - Obrazové příkazy potřebují Pillow. Závislost nejprve ověřit v existujícím prostředí.
 - Příklady volají skripty ze složky balíčku. Skutečné cesty odvodit ze složky načteného skillu.
 - Projektové, modelové, GEDCOM a obrazové příkazy zůstávají offline. Pouze
-  výslovná skupina `gramps` používá síť podle [samostatné reference](gramps.md);
+  skupina `gramps` používá síť podle [samostatné reference](gramps.md);
   žádný příkaz neprovádí trvalé cloudové ukládání badatelského ZIPu.
-- Skupina `archive mza` importuje a kontroluje místní soubory bez sítě;
-  `download` je vždy zakázán podle [reference MZA](mza.md).
+- `archive mza import/inspect` zůstávají offline. Pouze výslovný `download`
+  používá síť se soukromě evidovaným souhlasem podle [reference MZA](mza.md).
 - Stabilní vstup je `scripts/family_tree.py`. Samostatné `research.py`,
   `gedcom.py`, `crop.py` a `image_review.py` zůstávají kvůli kompatibilitě,
   ale nové postupy mají používat jednotné CLI.
@@ -140,6 +140,32 @@ manifestu se SHA-256. Obnova pokračuje stejnou revizí. Starší záznamy bez
 Import funguje také ve formátu 1, bez automatické migrace. Při následném
 `record put` zachovat celý `source.acquisition` a doplnit identifikaci shodně
 v `source.reference` i metadatech. Obrazové deriváty nadále patří do `crops/`.
+
+## Evidence živého získání MZA (0.6.0)
+
+U živého získání má `source.acquisition` navíc dva nepovinné objekty:
+
+- `permission`: `basis: user_attestation`, `scope: single_image`, přesné
+  uživatelské `statement`, `evidence_reference`, `recorded_at`, `sha256`
+  původního soukromého JSONu a `min_interval_seconds`. Je to evidence tvrzení
+  uživatele o souhlasu, nikoli programové ověření pravosti souhlasu MZA.
+- `iiif`: přesná `info_url`, `version` (2/3), `request_count`, `image_requests`
+  a `live_access_verified`. U mock testů je poslední hodnota vždy `false`.
+  Skutečný síťový průchod ji nastaví až po získání úplného obrazu, ověření
+  rozměrů a úspěšném importu. Neoznačuje genealogická tvrzení za ověřená.
+
+Tyto objekty vznikají ve stejné atomické změně jako záznam. `project check`
+kontroluje jejich strukturu; ZIP je přenese včetně soukromé citace souhlasu.
+Plný konfigurační soubor není automaticky součástí přenosu ani globálním
+oprávněním pro jiného uživatele. Obnovení projektu samo nepovolí živou síť.
+Soukromá konfigurace patří mimo Git, s právy 0600.
+
+Při chybě importu po úplném stažení zůstane kompletní PNG ve složce
+`.mza-acquisition-*` v kořeni soukromého projektu; chyba vypíše přesnou cestu.
+Lze jej znovu importovat bez nového stažení. Neúplný obraz se nepublikuje;
+pomocná složka není zahrnutá do ZIPu, dokud neproběhne skutečný import.
+Při opakovaném `download` již uložené přesné URL se použije místní kontrola,
+bez sítě. Případnou novou archivní verzi je nutné vybrat a posoudit výslovně.
 
 ## Výřez
 

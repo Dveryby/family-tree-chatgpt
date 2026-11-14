@@ -177,7 +177,11 @@ def execute(args):
         import mza
 
         if args.mza_command == "download":
-            return mza.download(args.url)
+            return mza.download(
+                args.url, args.workspace, permission_file=args.permission_file,
+                reference=args.reference, image_number=args.image_number,
+                expected_revision=args.expected_revision,
+            )
         if args.mza_command == "inspect":
             root = require_workspace(args) if args.workspace is not None else None
             return mza.inspect(args.url, root, args.file)
@@ -263,7 +267,7 @@ def build_parser():
 
     archive = commands.add_parser("archive", help="import a místní kontrola archivních snímků")
     archives = archive.add_subparsers(dest="archive_name", required=True)
-    mza_parser = archives.add_parser("mza", help="MZA: import bez sítě, živé stahování zakázáno")
+    mza_parser = archives.add_parser("mza", help="MZA: import a jednotlivé snímky se soukromou evidencí souhlasu")
     mza_commands = mza_parser.add_subparsers(dest="mza_command", required=True)
     mza_import = mza_commands.add_parser("import", help="nezměněná kopie snímku do sources/")
     mza_import.add_argument("file", type=Path)
@@ -281,8 +285,12 @@ def build_parser():
     mza_inspect = mza_commands.add_parser("inspect", help="místní metadata a duplicity, žádná síť")
     mza_inspect.add_argument("--url", required=True)
     mza_inspect.add_argument("--file", type=Path, help="volitelně porovnat SHA-256 místního souboru")
-    mza_download = mza_commands.add_parser("download", help="v této verzi vždy odmítne síťový přístup")
+    mza_download = mza_commands.add_parser("download", help="jeden snímek IIIF s evidovaným souhlasem MZA")
     mza_download.add_argument("--url", required=True)
+    mza_download.add_argument("--permission-file", type=Path, help="soukromá evidence souhlasu; jinak uživatelské nastavení")
+    mza_download.add_argument("--reference", default="")
+    mza_download.add_argument("--image-number", type=int)
+    mza_download.add_argument("--expected-revision", type=int)
 
     project = commands.add_parser("project", help="životní cyklus badatelského projektu")
     project_commands = project.add_subparsers(dest="project_command", required=True)

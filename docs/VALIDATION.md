@@ -398,3 +398,71 @@ plné rozlišení MZA nebylo získáno ani ověřeno. Hotová je bezpečná impo
 Žádný test neověřuje paleografii, totožnost osoby ani pravost archivní kopie.
 Nové soubory obsahují obecný kód a syntetické údaje; rodinné snímky, přepisy,
 GEDCOM ani přístupové údaje se do změny nepřidávají.
+
+## Živý režim MZA se soukromým potvrzením souhlasu, 14. listopadu 2026 (0.6.0)
+
+Na následný požadavek uživatel výslovně potvrdil, že má souhlas MZA pro IIIF.
+Implementace toto potvrzení eviduje jako `user_attestation`, nikoli jako
+nezávisle ověřený archivní dokument nebo veřejnou licenci. Konkrétní potvrzení
+je uložené pouze v soukromém uživatelském nastavení mimo Git, s právy 0600.
+Veřejné podmínky/nápověda/aktuality byly znovu přečteny; jejich výklad se tím
+nemění a nevydáváme je za obecné povolení IIIF.
+
+`archive mza download` nyní používá oddělený `mza_live.py`: nejprve ověří
+soukromou evidenci souhlasu a jeden přesný odkaz, potom načte veřejný detail,
+vybere pouze úplný zveřejněný zdroj stejného JP2 a získá IIIF obraz. Přepínač
+IIIF na stejném IIPImage endpointu odpovídá
+[oficiální dokumentaci IIPImage](https://iipimage.sourceforge.io/documentation/server/).
+Není převzat cizí kód ani pevná konstrukce adresáře či náhrada názvu souboru.
+
+Síťový transport ověřuje certifikáty i hostname, kontroluje doménu, cestu,
+parametry a veřejné DNS adresy a připíná TCP cíl při zachování původního SNI.
+Neobsahuje cookies, přihlašování ani řešení ochran. Všechna přesměrování,
+HTTP 401/403/429 a ochranný obsah relaci zastaví. Rozměry, dlaždice, přenos,
+timeout, Retry-After a atomické ukládání se kontrolují stejně jako v offline
+adaptéru. Souhlas i parametry IIIF jsou součástí atomicky ukládaného záznamu,
+kontroly stavu a exportu/obnovy. Při chybě importu zůstává úplný PNG pro
+ruční převzetí bez dalšího stahování. Již uložená přesná URL se znovu nestahuje.
+
+### Skutečný síťový pokus
+
+Po úspěšných testech byl proveden jediný pokus proti veřejnému detailu
+z příkladu referenčního projektu (interní detail 7163). Transport dostal
+HTTP 200 a detekce ochranného obsahu operaci ukončila ještě před vyhledáním
+obrazové adresy. Žádné info.json, snímek ani dlaždice nebyly poté požadovány.
+Nebyl použit alternativní klient, ruční odemykání, token ani jiná síťová cesta.
+Soukromý výsledek pokusu a prázdný projekt zůstaly mimo Git.
+
+Ověřeno je skutečné HTTPS spojení k detailu a bezpečné zastavení, nikoli
+úspěšné živé stažení. Skutečné plné rozlišení MZA ani čitelnost archivního
+snímku se tím neprokazují. Rozměry 517 × 389 px v nových síťových testech
+pocházejí výhradně ze syntetického mock serveru. Předchozí obrázky a piloty
+zůstávají historickými výsledky popsanými výše.
+
+### Automatické ověření
+
+Python 3.13.5 / Pillow 11.1.0: celá sada po doplnění síťových testů obsahuje
+**105 testů, OK**, z toho 17 nových testů v `tests/test_mza_live.py`.
+Testy nevytvářejí produkční HTTP požadavky. Ověřují:
+
+- chybějící, neplatné, prošlé, nezabezpečené nebo symlinkové potvrzení a
+  neplatnou revizi či číslo snímku ještě před jakýmkoli požadavkem;
+- API 2/3, jeden celý obraz i dlaždice přes stejný živý tok s mock transportem;
+- uložení souhlasu a IIIF metadat, jejich poškození, export a obnovu;
+- duplicitní požadavek bez sítě a zachování úplné kopie při chybě importu;
+- přesnou identitu zveřejněného zdroje, JS escapování, odmítnutí chybějícího,
+  nejednoznačného nebo jiného JP2 bez odhadování adresáře;
+- domény, neveřejné/mapované IP, traversal a DNS pinning s původním TLS hostname;
+- zapnuté ověřování certifikátů a odmítnutí TLS chyby bez obcházení;
+- kontrolu deklarované i průběžně čtené délky, truncation a okamžitou reakci
+  na blokaci bez čtení jejího těla;
+- zastavení ochranného obsahu také za prvních 64 KiB HTML a žádný další endpoint.
+
+Verze 0.6.0 je sjednocená v obou manifestech a VERSION. Nové repozitářové
+soubory obsahují jen obecný kód a syntetické testy; konkrétní souhlas,
+konfigurační soubor ani soukromý výsledek skutečného pokusu nejsou součástí změn.
+
+Dodatečně ověřen společný zámek proti paralelním příkazům, odvolání či změna
+souhlasu mezi požadavky a započtení částečně přijatých bajtů při timeoutu
+do celkového přenosového limitu. Po prvním zachycení ochrany se živý pokus
+neopakoval.
