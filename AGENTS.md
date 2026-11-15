@@ -36,3 +36,15 @@
 - Používej syntetická data pro automatické testy.
 - U změn parsování, vazeb osob a ukládání dat testuj skutečné okrajové případy a ztrátu či záměnu údajů.
 - U čistě dokumentačních změn stačí kontrola obsahu a odkazů.
+
+## Etapa 2 – úsporný režim
+- Neopakuj již dokončené audity etap 0–1.
+- Čti pouze soubory relevantní pro aktuální změny.
+- Nespouštěj prohlížeč ani externí rešerše bez konkrétního důvodu.
+- Během implementace používej cílené testy.
+- Kompletní regresní testy spusť jednou na závěr.
+- Nepřidávej zbytečné funkce ani rozsáhlé refaktoringy.
+- Nevytvářej veřejná GitHub Issues s genealogickými údaji.
+- Skutečné rodinné údaje a archivní snímky necommituj.
+- Není-li archiv B lokálně dostupný, použij syntetickou testovací fixture a
+  nezdržuj implementaci opakovaným hledáním archivu.

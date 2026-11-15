@@ -447,13 +447,96 @@ class GenealogyStore:
                 {"run_id": run_id, "from": row["status"], "to": status},
             )
 
-    def create_person(self, person_id, project_id, branch_id, label, *, import_run_id=None, notes="", actor):
+    def add_import_snapshot(
+        self, snapshot_id, project_id, branch_id, import_run_id,
+        original_file_id, snapshot_kind, source_schema_version,
+        source_revision, payload, *, actor,
+    ):
+        payload_json = canonical_json(payload)
         created_at = now()
         with transaction(self.connection):
             self.connection.execute(
-                "INSERT INTO persons(id, project_id, branch_id, import_run_id, label, notes, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (person_id, project_id, branch_id, import_run_id, label, notes, created_at),
+                "INSERT INTO import_state_snapshots "
+                "(id, project_id, branch_id, import_run_id, original_file_id, snapshot_kind, "
+                "source_schema_version, source_revision, payload_json, payload_sha256, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    snapshot_id, project_id, branch_id, import_run_id,
+                    original_file_id, snapshot_kind, source_schema_version,
+                    source_revision, payload_json, digest_text(payload_json), created_at,
+                ),
+            )
+            self._append_audit(
+                project_id, actor, "import.snapshot_preserved",
+                {
+                    "snapshot_id": snapshot_id,
+                    "kind": snapshot_kind,
+                    "source_revision": source_revision,
+                },
+                created_at,
+            )
+
+    def add_import_history_event(
+        self, event_id, project_id, branch_id, import_run_id,
+        event_index, payload, *, source_revision=None, actor,
+    ):
+        created_at = now()
+        with transaction(self.connection):
+            self.connection.execute(
+                "INSERT INTO import_history_events "
+                "(id, project_id, branch_id, import_run_id, event_index, source_revision, "
+                "payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event_id, project_id, branch_id, import_run_id, event_index,
+                    source_revision, canonical_json(payload), created_at,
+                ),
+            )
+
+    def add_imported_record_text(
+        self, text_id, project_id, branch_id, import_run_id, record_id,
+        text_kind, text_value, provenance, *, actor,
+    ):
+        created_at = now()
+        with transaction(self.connection):
+            self.connection.execute(
+                "INSERT INTO imported_record_texts "
+                "(id, project_id, branch_id, import_run_id, record_id, text_kind, "
+                "text_value, provenance_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    text_id, project_id, branch_id, import_run_id, record_id,
+                    text_kind, text_value, canonical_json(provenance), created_at,
+                ),
+            )
+
+    def add_imported_uncertainty(
+        self, uncertainty_id, project_id, branch_id, import_run_id,
+        record_id, sequence_no, text, *, actor,
+    ):
+        created_at = now()
+        with transaction(self.connection):
+            self.connection.execute(
+                "INSERT INTO imported_record_uncertainties "
+                "(id, project_id, branch_id, import_run_id, record_id, sequence_no, "
+                "uncertainty_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    uncertainty_id, project_id, branch_id, import_run_id,
+                    record_id, sequence_no, text, created_at,
+                ),
+            )
+
+    def create_person(
+        self, person_id, project_id, branch_id, label, *, import_run_id=None,
+        notes="", source_identifier="", source_json=None, actor,
+    ):
+        created_at = now()
+        with transaction(self.connection):
+            self.connection.execute(
+                "INSERT INTO persons(id, project_id, branch_id, import_run_id, label, notes, created_at, "
+                "source_identifier, source_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    person_id, project_id, branch_id, import_run_id, label, notes, created_at,
+                    source_identifier, canonical_json({} if source_json is None else source_json),
+                ),
             )
             self._append_audit(
                 project_id, actor, "person.container_created",
@@ -462,17 +545,19 @@ class GenealogyStore:
 
     def create_source(
         self, source_id, project_id, branch_id, kind, title, *, citation="",
-        repository="", url="", notes="", import_run_id=None, actor,
+        repository="", url="", notes="", import_run_id=None,
+        source_identifier="", source_json=None, actor,
     ):
         created_at = now()
         with transaction(self.connection):
             self.connection.execute(
                 "INSERT INTO sources "
-                "(id, project_id, branch_id, import_run_id, kind, title, citation, repository, url, notes, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(id, project_id, branch_id, import_run_id, kind, title, citation, repository, url, notes, "
+                "created_at, source_identifier, source_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     source_id, project_id, branch_id, import_run_id, kind, title,
-                    citation, repository, url, notes, created_at,
+                    citation, repository, url, notes, created_at, source_identifier,
+                    canonical_json({} if source_json is None else source_json),
                 ),
             )
             self._append_audit(
@@ -483,19 +568,21 @@ class GenealogyStore:
     def create_record(
         self, record_id, project_id, branch_id, record_kind, title, *,
         source_id=None, reading_status="unread", visual_reviewed_at=None,
-        original_language="", notes="", import_run_id=None, actor,
+        original_language="", notes="", import_run_id=None,
+        source_identifier="", source_json=None, actor,
     ):
         created_at = now()
         with transaction(self.connection):
             self.connection.execute(
                 "INSERT INTO research_records "
                 "(id, project_id, branch_id, import_run_id, source_id, record_kind, title, "
-                "original_language, reading_status, visual_reviewed_at, notes, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "original_language, reading_status, visual_reviewed_at, notes, created_at, "
+                "source_identifier, source_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     record_id, project_id, branch_id, import_run_id, source_id,
                     record_kind, title, original_language, reading_status,
-                    visual_reviewed_at, notes, created_at,
+                    visual_reviewed_at, notes, created_at, source_identifier,
+                    canonical_json({} if source_json is None else source_json),
                 ),
             )
             self._append_audit(
@@ -555,7 +642,8 @@ class GenealogyStore:
 
     def create_relationship(
         self, relationship_id, project_id, branch_id, relationship_type,
-        participants, *, import_run_id=None, notes="", actor,
+        participants, *, import_run_id=None, notes="", source_identifier="",
+        source_json=None, actor,
     ):
         if not isinstance(participants, list) or len(participants) < 2:
             raise ValueError("Vztah vyžaduje alespoň dva účastníky.")
@@ -563,11 +651,12 @@ class GenealogyStore:
         with transaction(self.connection):
             self.connection.execute(
                 "INSERT INTO relationships "
-                "(id, project_id, branch_id, import_run_id, relationship_type, notes, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(id, project_id, branch_id, import_run_id, relationship_type, notes, created_at, "
+                "source_identifier, source_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     relationship_id, project_id, branch_id, import_run_id,
-                    relationship_type, notes, created_at,
+                    relationship_type, notes, created_at, source_identifier,
+                    canonical_json({} if source_json is None else source_json),
                 ),
             )
             for participant in participants:
@@ -609,7 +698,7 @@ class GenealogyStore:
     def create_claim(
         self, claim_id, project_id, branch_id, subject_kind, subject_id,
         predicate, value, *, evidence_level="none", notes="",
-        import_run_id=None, actor,
+        import_run_id=None, source_identifier="", source_json=None, actor,
     ):
         subject_columns = {
             "person": (subject_id, None, None, None),
@@ -624,12 +713,14 @@ class GenealogyStore:
             self.connection.execute(
                 "INSERT INTO claims "
                 "(id, project_id, branch_id, import_run_id, subject_kind, person_id, relationship_id, "
-                "event_id, record_id, predicate, value_json, status, evidence_level, rationale, notes, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unverified', ?, '', ?, ?)",
+                "event_id, record_id, predicate, value_json, status, evidence_level, rationale, notes, "
+                "created_at, source_identifier, source_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unverified', ?, '', ?, ?, ?, ?)",
                 (
                     claim_id, project_id, branch_id, import_run_id, subject_kind,
                     *subject_columns[subject_kind], predicate, canonical_json(value),
-                    evidence_level, notes, created_at,
+                    evidence_level, notes, created_at, source_identifier,
+                    canonical_json({} if source_json is None else source_json),
                 ),
             )
             self._append_audit(
@@ -640,17 +731,19 @@ class GenealogyStore:
 
     def add_citation(
         self, citation_id, project_id, branch_id, claim_id, source_id, *,
-        record_id=None, locator="", quotation="", note="", actor,
+        record_id=None, locator="", quotation="", note="",
+        source_identifier="", source_json=None, actor,
     ):
         created_at = now()
         with transaction(self.connection):
             self.connection.execute(
                 "INSERT INTO citations "
-                "(id, project_id, branch_id, claim_id, source_id, record_id, locator, quotation, note, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(id, project_id, branch_id, claim_id, source_id, record_id, locator, quotation, note, "
+                "created_at, source_identifier, source_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     citation_id, project_id, branch_id, claim_id, source_id,
-                    record_id, locator, quotation, note, created_at,
+                    record_id, locator, quotation, note, created_at, source_identifier,
+                    canonical_json({} if source_json is None else source_json),
                 ),
             )
             self._append_audit(
@@ -736,15 +829,22 @@ class GenealogyStore:
                 {"assessment_id": assessment_id, "status": status}, decided_at,
             )
 
-    def create_conflict(self, conflict_id, project_id, code, label, claim_ids, *, actor):
+    def create_conflict(
+        self, conflict_id, project_id, code, label, claim_ids, *,
+        source_identifier="", source_json=None, source_branch_id=None, actor,
+    ):
         if not isinstance(claim_ids, list) or len(set(claim_ids)) < 2:
             raise ValueError("Konflikt vyžaduje nejméně dvě různá tvrzení.")
         created_at = now()
         with transaction(self.connection):
             self.connection.execute(
-                "INSERT INTO conflicts(id, project_id, code, label, status, created_at) "
-                "VALUES (?, ?, ?, ?, 'open', ?)",
-                (conflict_id, project_id, code, label, created_at),
+                "INSERT INTO conflicts(id, project_id, code, label, status, created_at, "
+                "source_identifier, source_json, source_branch_id) "
+                "VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?)",
+                (
+                    conflict_id, project_id, code, label, created_at, source_identifier,
+                    canonical_json({} if source_json is None else source_json), source_branch_id,
+                ),
             )
             for claim_id in claim_ids:
                 self.connection.execute(
@@ -788,7 +888,7 @@ class GenealogyStore:
     def add_media_object(
         self, media_id, project_id, branch_id, media_kind, sha256, byte_size,
         media_type, storage_path, provenance, *, original_file_id=None,
-        source_id=None, record_id=None, actor,
+        source_id=None, record_id=None, source_identifier="", source_json=None, actor,
     ):
         validate_sha256(sha256)
         created_at = now()
@@ -796,12 +896,13 @@ class GenealogyStore:
             self.connection.execute(
                 "INSERT INTO media_objects "
                 "(id, project_id, branch_id, original_file_id, source_id, record_id, media_kind, "
-                "sha256, byte_size, media_type, storage_path, provenance_json, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "sha256, byte_size, media_type, storage_path, provenance_json, created_at, "
+                "source_identifier, source_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     media_id, project_id, branch_id, original_file_id, source_id,
                     record_id, media_kind, sha256, byte_size, media_type,
-                    storage_path, canonical_json(provenance), created_at,
+                    storage_path, canonical_json(provenance), created_at, source_identifier,
+                    canonical_json({} if source_json is None else source_json),
                 ),
             )
             self._append_audit(
@@ -951,6 +1052,8 @@ def database_status(database):
             "projects", "import_branches", "original_files", "import_runs", "persons",
             "sources", "research_records", "events", "relationships", "claims",
             "citations", "identity_assessments", "conflicts", "audit_revisions", "sync_outbox",
+            "import_state_snapshots", "import_history_events", "imported_record_texts",
+            "imported_record_uncertainties",
         )
         return {
             "schema_version": _user_version(connection),
@@ -1030,6 +1133,11 @@ def validate_database(database):
         for row in connection.execute("SELECT id, payload_json, payload_sha256 FROM sync_outbox"):
             if digest_text(row["payload_json"]) != row["payload_sha256"]:
                 errors.append(f"Outbox {row['id']} má chybný hash payloadu.")
+        for row in connection.execute(
+            "SELECT id, payload_json, payload_sha256 FROM import_state_snapshots"
+        ):
+            if digest_text(row["payload_json"]) != row["payload_sha256"]:
+                errors.append(f"Importní snapshot {row['id']} má chybný hash payloadu.")
         return errors
     finally:
         if close:

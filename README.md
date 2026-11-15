@@ -188,6 +188,18 @@ python3 skills/family-tree-chatgpt/scripts/family_tree.py database status /soukr
 Schéma, ERD, invarianta, neautomatický plán oddělené migrace obou historií a
 rollback jsou v [dokumentaci ETAPY 1](docs/ETAPA_1_SQLITE.md).
 
+ETAPA 2 přidává idempotentní import `research.json` formátu 1 i 2 do oddělených
+větví, dry-run report a čistě lokální schválení Gramps outboxu. Import zachovává
+původní ID v explicitních polích, úplné JSON snapshoty, historii, přepisy,
+citace, konflikty a provenienci; osoby mezi větvemi neslučuje. Použití a formát
+schvalovacího JSON popisuje [dokumentace ETAPY 2](docs/ETAPA_2_IMPORT_ADAPTERS.md).
+
+```sh
+python3 skills/family-tree-chatgpt/scripts/family_tree.py database migrate /soukrome/family-tree-2.sqlite
+python3 skills/family-tree-chatgpt/scripts/family_tree.py database import-research /soukrome/family-tree-2.sqlite /soukrome/vetev-a --project-id rodokmen --project-name "Soukromý výzkum" --branch-key revision_13_a --branch-label "Revize 13 – větev A" --actor badatel --dry-run
+python3 skills/family-tree-chatgpt/scripts/family_tree.py database outbox-approve /soukrome/family-tree-2.sqlite /soukrome/outbox.json --approved-by badatel --dry-run
+```
+
 ### Jeden snímek MZA / ActaPublica
 
 Nejprve získat jednu kopii oprávněnou cestou. [Nápověda MZA](https://www.mza.cz/actapublica/page/view/napoveda)

@@ -35,13 +35,13 @@ class MigrationTests(unittest.TestCase):
 
     def test_empty_database_runs_real_migrations_and_records_checksums(self):
         result = sqlite_store.initialize_database(self.database)
-        self.assertEqual(result["schema_version"], 2)
+        self.assertEqual(result["schema_version"], 3)
         with sqlite3.connect(self.database) as connection:
             rows = connection.execute(
                 "SELECT version, name, sha256 FROM schema_migrations ORDER BY version"
             ).fetchall()
-            self.assertEqual([row[0] for row in rows], [1, 2])
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual([row[0] for row in rows], [1, 2, 3])
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
             for version, name, digest in rows:
                 migration = sqlite_store.migrations()[version - 1]
                 self.assertEqual(name, migration.name)
@@ -49,7 +49,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(sqlite_store.validate_database(self.database), [])
         self.assertEqual(self.database.stat().st_mode & 0o777, 0o600)
 
-    def test_migration_one_to_two_preserves_existing_rows(self):
+    def test_migration_one_to_current_preserves_existing_rows(self):
         sqlite_store.initialize_database(self.database, target_version=1)
         status = sqlite_store.database_status(self.database)
         self.assertTrue(status["needs_migration"])
@@ -72,9 +72,12 @@ class MigrationTests(unittest.TestCase):
         result = sqlite_store.migrate_database(self.database)
         self.assertTrue(result["migrated"])
         self.assertEqual(result["from_schema_version"], 1)
-        self.assertEqual(result["schema_version"], 2)
+        self.assertEqual(result["schema_version"], 3)
         with sqlite3.connect(self.database) as connection:
             self.assertEqual(connection.execute("SELECT label FROM persons").fetchone()[0], "Identity container")
+            self.assertEqual(connection.execute(
+                "SELECT source_identifier FROM persons"
+            ).fetchone()[0], "")
             self.assertIsNotNone(connection.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sync_outbox'"
             ).fetchone())
@@ -91,7 +94,7 @@ class MigrationTests(unittest.TestCase):
             [sys.executable, str(CLI), "database", "init", str(self.database)],
             check=True, capture_output=True, text=True,
         )
-        self.assertEqual(json.loads(initialized.stdout)["schema_version"], 2)
+        self.assertEqual(json.loads(initialized.stdout)["schema_version"], 3)
         status = subprocess.run(
             [sys.executable, str(CLI), "database", "status", str(self.database)],
             check=True, capture_output=True, text=True,

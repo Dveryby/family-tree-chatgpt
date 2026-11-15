@@ -8,6 +8,7 @@ import sys
 import gedcom
 import gramps
 import research
+import research_import
 import sqlite_store
 
 
@@ -181,6 +182,22 @@ def execute(args):
             return sqlite_store.migrate_database(args.database)
         if args.database_command == "status":
             return sqlite_store.database_status(args.database)
+        if args.database_command == "import-research":
+            return research_import.import_research(
+                args.database, args.input,
+                project_id=args.project_id,
+                project_name=args.project_name,
+                branch_key=args.branch_key,
+                branch_label=args.branch_label,
+                actor=args.actor,
+                dry_run=args.dry_run,
+            )
+        if args.database_command == "outbox-approve":
+            return research_import.approve_outbox(
+                args.database, private_json(args.approval_json),
+                approved_by=args.approved_by,
+                dry_run=args.dry_run,
+            )
         errors = sqlite_store.validate_database(args.database)
         if errors:
             raise ValueError("\n".join(errors))
@@ -280,6 +297,26 @@ def build_parser():
     for name in ("init", "migrate", "status", "check"):
         command = database_commands.add_parser(name)
         command.add_argument("database", type=Path, help="soukromý SQLite soubor mimo Git")
+    database_import = database_commands.add_parser(
+        "import-research",
+        help="importovat research.json formátu 1 nebo 2 do samostatné větve",
+    )
+    database_import.add_argument("database", type=Path, help="existující soukromý SQLite soubor")
+    database_import.add_argument("input", type=Path, help="pracovní složka nebo její research.json")
+    database_import.add_argument("--project-id", required=True)
+    database_import.add_argument("--project-name", required=True)
+    database_import.add_argument("--branch-key", required=True)
+    database_import.add_argument("--branch-label", required=True)
+    database_import.add_argument("--actor", required=True, help="aktér zapsaný do místního auditu")
+    database_import.add_argument("--dry-run", action="store_true")
+    outbox_approve = database_commands.add_parser(
+        "outbox-approve",
+        help="lokálně schválit způsobilé operace; nic do Gramps neodesílá",
+    )
+    outbox_approve.add_argument("database", type=Path)
+    outbox_approve.add_argument("approval_json", type=Path)
+    outbox_approve.add_argument("--approved-by", required=True)
+    outbox_approve.add_argument("--dry-run", action="store_true")
 
     archive = commands.add_parser("archive", help="import a místní kontrola archivních snímků")
     archives = archive.add_subparsers(dest="archive_name", required=True)

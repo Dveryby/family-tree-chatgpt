@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "records": {
+    "record_v1": {
+      "id": "record_v1",
+      "source": {
+        "archive": "",
+        "reference": "",
+        "page": "",
+        "url": "",
+        "accessed_on": "",
+        "file": "",
+        "crop": ""
+      },
+      "reading_status": "draft",
+      "visual_review": false,
+      "transcription": "Syntetický přepis (?)",
+      "translation": "Syntetický překlad.",
+      "interpretation": "Syntetická interpretace bez ztotožnění.",
+      "uncertainties": [
+        "Syntetická nejistota."
+      ],
+      "identity": {
+        "status": "unresolved",
+        "rationale": "",
+        "evidence": []
+      }
+    }
+  },
+  "events": [
+    {
+      "result": "record_saved",
+      "record_id": "record_v1",
+      "revision": 1,
+      "at": "2026-11-15T10:00:00+00:00"
+    }
+  ],
+  "next_step": "Prověřit syntetickou nejistotu."
+}
