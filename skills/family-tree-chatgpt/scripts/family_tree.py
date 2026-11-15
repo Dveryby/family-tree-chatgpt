@@ -8,6 +8,7 @@ import sys
 import gedcom
 import gramps
 import research
+import sqlite_store
 
 
 MAX_JSON_INPUT_BYTES = 50 * 1024 * 1024
@@ -173,6 +174,17 @@ def gramps_command(args):
 
 
 def execute(args):
+    if args.command == "database":
+        if args.database_command == "init":
+            return sqlite_store.initialize_database(args.database)
+        if args.database_command == "migrate":
+            return sqlite_store.migrate_database(args.database)
+        if args.database_command == "status":
+            return sqlite_store.database_status(args.database)
+        errors = sqlite_store.validate_database(args.database)
+        if errors:
+            raise ValueError("\n".join(errors))
+        return {"valid": True, **sqlite_store.database_status(args.database)}
     if args.command == "archive":
         import mza
 
@@ -260,6 +272,14 @@ def build_parser():
     parser.add_argument("--version", action="version", version=f"%(prog)s {project_version()}")
     parser.add_argument("--workspace", type=Path, help="soukromá badatelská složka mimo Git")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    database = commands.add_parser(
+        "database", help="verzovaná SQLite vrstva Family Tree 2.0 bez síťových zápisů"
+    )
+    database_commands = database.add_subparsers(dest="database_command", required=True)
+    for name in ("init", "migrate", "status", "check"):
+        command = database_commands.add_parser(name)
+        command.add_argument("database", type=Path, help="soukromý SQLite soubor mimo Git")
 
     archive = commands.add_parser("archive", help="import a místní kontrola archivních snímků")
     archives = archive.add_subparsers(dest="archive_name", required=True)

@@ -398,3 +398,40 @@ plné rozlišení MZA nebylo získáno ani ověřeno. Hotová je bezpečná impo
 Žádný test neověřuje paleografii, totožnost osoby ani pravost archivní kopie.
 Nové soubory obsahují obecný kód a syntetické údaje; rodinné snímky, přepisy,
 GEDCOM ani přístupové údaje se do změny nepřidávají.
+
+## ETAPA 1 SQLite Family Tree 2.0, 15. listopadu 2026
+
+Výchozí stav byl čistý `main` na `01aaa16dc429b19d04008be6f3598dca644fb396`,
+shodný s `origin/main` a dříve auditovaným commitem 0.5.0. Soubor `VERSION`
+uváděl 0.5.0; commit neměl tag `v0.5.0` a `git describe` vracel
+`v0.4.5-2-g01aaa16`. Implementace proběhla odděleně na větvi
+`codex/etapa-1-sqlite-model`.
+
+Před změnou prošlo všech 88 existujících testů. Po implementaci bylo spuštěno
+`python3 -m unittest discover -s tests -v`: **99 testů, 13,490 s, OK**.
+Z toho je 11 nových SQLite testů v `tests/test_sqlite_store.py`.
+
+Ověřeno:
+
+- migrace prázdné databáze na verzi 2 a migrace 1 → 2 se zachováním řádků;
+- migrační ledger, `PRAGMA user_version`, SHA-256 migračních souborů,
+  `integrity_check` a `foreign_key_check`;
+- CLI `database init`, `status` a `check` nad dočasnou databází mimo Git;
+- samostatné importní větve A/B pouze z dříve ověřené metadata-only fixture,
+  jejich rozdílné schema verze, hashe, počty a idempotentní importní běhy;
+- oddělení `reviewed` od `supported`, narození od křtu a úmrtí od pohřbu;
+- osoba a vztah jako kontejnery bez implicitní pravdivosti;
+- podporované i zamítnuté tvrzení s citací, zdůvodněním a stupněm důkazu;
+- pozitivní podklady a protidůkazy posouzení totožnosti;
+- zachování konfliktních tvrzení, append-only rozhodnutí a zákaz přepsání faktu;
+- varianty přepisu user/ChatGPT/Gemini, jazyk a jistota čtení;
+- původ obrazu, výřez, badatelský úkol a neměnné negativní hledání;
+- souvislý append-only auditní hashový řetězec;
+- idempotentní a neměnný schválený outbox bez pokusu o odeslání;
+- plná regrese dosavadních JSON, GEDCOM, obrazových, MZA, Gramps a balíčkových
+  testů.
+
+Testy nevstupovaly na Villa2, do produkčního Gramps Webu ani do archivních
+portálů. Nevznikla žádná produkční databáze a skutečný obsah větví A/B nebyl
+importován. Fixture obsahuje jen zadaná metadata a kontrolní součty; obsah
+archivů ani konflikty K01–K13 nevymýšlí.

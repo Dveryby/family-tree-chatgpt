@@ -176,3 +176,22 @@ python3 scripts/family_tree.py --workspace /soukroma project migrate \
 Migrace vytvoří prázdné kolekce obecného modelu, zvýší revizi a zachová předchozí
 stav v `history/`. Ze starých přepisů automaticky nevytváří osoby, vztahy ani
 tvrzení; jejich význam musí badatel určit vědomě.
+
+## Volitelná SQLite vrstva Family Tree 2.0
+
+Pro více oddělených importních historií je v repozitáři dostupná samostatná,
+verzovaná SQLite vrstva. Nenahrazuje `research.json` a žádný existující projekt
+do ní nepřevádí automaticky. Soukromý databázový soubor musí zůstat mimo Git.
+
+```sh
+python3 scripts/family_tree.py database init /soukroma/family-tree-2.sqlite
+python3 scripts/family_tree.py database check /soukroma/family-tree-2.sqlite
+python3 scripts/family_tree.py database status /soukroma/family-tree-2.sqlite
+```
+
+SQLite model navíc uchovává importní větve, původní soubory a jejich SHA-256,
+segmentové varianty přepisů, události, posouzení totožnosti s podklady i
+protidůkazy, obrazový původ, badatelské úkoly, negativní hledání, append-only
+audit a schválený idempotentní outbox. Outbox v této etapě nic neodesílá.
+Mapování soukromého JSON nebo ZIP archivu se provádí až vědomým importérem s
+vlastní větví a kontrolou počtů; shodný popisek revize není důvodem ke sloučení.

@@ -1,0 +1,45 @@
+{
+  "fixture_scope": "metadata_only",
+  "warning": "Neobsahuje rodinná data ani obsah archivů; hodnoty jsou pouze dříve ověřená metadata ETAPY 0B.",
+  "branches": [
+    {
+      "key": "revision_13_a",
+      "label": "Revize 13 – větev A",
+      "history_kind": "json_v2",
+      "schema_version": 2,
+      "artifact_kind": "archive",
+      "artifact_sha256": "099959713c8acf8420c570236eac0f52b692b4a9608d01b2d94fcd90ce78ca1e",
+      "content_in_fixture": false,
+      "counts": {
+        "records": 3,
+        "persons": 15,
+        "relationships": 15,
+        "claims": 94,
+        "sources": 6,
+        "citations": 94
+      }
+    },
+    {
+      "key": "revision_13_b",
+      "label": "Revize 13 – větev B",
+      "history_kind": "json_v1",
+      "schema_version": 1,
+      "artifact_kind": "zip",
+      "artifact_sha256": "79ffdb589a6ec31322112fbed38f01bf688b79392cdf24241bedb66479bdcd38",
+      "library_location": "/Genealogie rodu Hrachovinovych/FamilyTree/",
+      "locally_available": false,
+      "content_in_fixture": false,
+      "counts": {
+        "research_records": 12,
+        "sources": 15,
+        "crops": 10
+      }
+    }
+  ],
+  "known_conflicts": {
+    "first": "K01",
+    "last": "K13",
+    "count": 13,
+    "content_in_fixture": false
+  }
+}

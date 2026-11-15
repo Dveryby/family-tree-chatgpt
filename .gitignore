@@ -25,6 +25,13 @@ coverage/
 *.ftb
 *.gramps
 *.gpkg
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
 /private/
 /research/
 /data/

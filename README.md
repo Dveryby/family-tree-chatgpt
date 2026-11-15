@@ -172,6 +172,22 @@ python3 skills/family-tree-chatgpt/scripts/family_tree.py gramps tasks push /sou
 python3 skills/family-tree-chatgpt/scripts/family_tree.py image split /soukrome-uloziste/snimky/scan.png /soukrome-uloziste/snimky/left.png /soukrome-uloziste/snimky/right.png
 ```
 
+### Volitelná SQLite vrstva Family Tree 2.0
+
+ETAPA 1 přidává verzované SQLite schéma a místní modelové API vedle stávajícího
+`research.json`. Dosavadní formáty 1/2 ani jejich příkazy nenahrazuje. Databáze
+musí zůstat v soukromém úložišti mimo Git; synchronizační outbox v této etapě
+nic neodesílá.
+
+```sh
+python3 skills/family-tree-chatgpt/scripts/family_tree.py database init /soukrome-uloziste/family-tree-2.sqlite
+python3 skills/family-tree-chatgpt/scripts/family_tree.py database check /soukrome-uloziste/family-tree-2.sqlite
+python3 skills/family-tree-chatgpt/scripts/family_tree.py database status /soukrome-uloziste/family-tree-2.sqlite
+```
+
+Schéma, ERD, invarianta, neautomatický plán oddělené migrace obou historií a
+rollback jsou v [dokumentaci ETAPY 1](docs/ETAPA_1_SQLITE.md).
+
 ### Jeden snímek MZA / ActaPublica
 
 Nejprve získat jednu kopii oprávněnou cestou. [Nápověda MZA](https://www.mza.cz/actapublica/page/view/napoveda)
