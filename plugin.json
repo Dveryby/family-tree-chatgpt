@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "family-tree-chatgpt",
-  "version": "0.5.0",
-  "description": "Soukromí respektující nástroj pro dohledatelný genealogický výzkum v češtině.",
+  "version": "0.6.0",
+  "description": "Genealogický výzkum přes Family Tree MCP 2.1 a pracovní Gramps Web s označenými hypotézami.",
   "author": {
     "name": "Dveryby",
     "url": "https://github.com/Dveryby"
@@ -14,14 +14,17 @@
     "genealogy",
     "research",
     "gedcom",
-    "gramps"
+    "gramps",
+    "mcp",
+    "sqlite",
+    "evidence"
   ],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Family Tree for ChatGPT",
-        "shortDescription": "Genealogický výzkum",
-        "longDescription": "Dohledatelný genealogický výzkum s odděleným přepisem, interpretací, tvrzeními, prameny a konflikty.",
+        "shortDescription": "Genealogie přes MCP",
+        "longDescription": "Matriky, zdroje, tvrzení a konflikty v SQLite přes MCP; Gramps Web jako vizuální rodokmen včetně neověřených údajů.",
         "developerName": "Dveryby",
         "category": "Education & Research",
         "capabilities": [
@@ -30,9 +33,9 @@
         ],
         "websiteURL": "https://github.com/Dveryby/family-tree-chatgpt",
         "defaultPrompt": [
-          "Založ nový genealogický výzkum s dohledatelnými prameny.",
-          "Obnov badatelský stav a navrhni další ověřitelný krok.",
-          "Připrav bezpečný plán exportu do Gramps Web."
+          "Prohledej badatelskou SQLite DB přes Family Tree MCP a dolož zdroje.",
+          "Ulož tento matriční nález jedním voláním research_save_findings.",
+          "Zobraz v Grampsu i pracovní hypotézy s jasně označenou nejistotou."
         ]
       }
     }

@@ -1,23 +1,65 @@
 ---
 name: family-tree-chatgpt
 description: >-
-  Český genealogický pracovní postup pro čtení jednoho matričního zápisu,
-  přepis a překlad snímku, evidenci pramenů, posouzení totožnosti osob,
-  správu osob, vztahů, tvrzení a konfliktů, import neověřených GEDCOM tvrzení,
-  import jednotlivých snímků MZA s původem a kontrolou integrity
-  a jednosměrný export podporovaných tvrzení do Gramps Web. Použij
-  při dotazech na rodokmen, předky a matriky, pokud uživatel dodá snímek, odkaz,
-  GEDCOM nebo existující badatelský stav. Nezajišťuje automatické procházení
-  archivů, obousměrnou synchronizaci Gramps ani rodinný web.
+  Český genealogický výzkum a práce s matrikami, prameny, identitami,
+  tvrzeními, konflikty a GEDCOM. Při dostupném Family Tree MCP 2.1
+  preferovat živou badatelskou SQLite DB a Gramps Web jako vizuální
+  pracovní rodokmen, včetně jasně označených neověřených hypotéz.
+  Použij při hledání předků, přepisu matrik, ukládání nálezů,
+  porovnávání důkazů a publikaci pracovních dat do Grampsu.
+  Offline CLI je samostatný náhradní režim.
 ---
 
 # Rodokmen pro ChatGPT
+
+## Priorita živého Family Tree MCP 2.1
+
+1. Při připojeném `family_tree_mcp_server` používat pro badatelská data
+   přednostně jeho nástroje: `database_status`, `search_persons`,
+   `search_records`, `get_record`, `get_claim`, `get_media_info`,
+   `get_media`, `list_audit_revisions`, `get_audit_revision`.
+   Všechny dostupné nástroje a jejich aktuální omezení jsou popsány
+   v [referenci MCP](references/mcp.md). Samostatná integrace MCP musí být
+   v ChatGPT připojena; instalace samotného skills-only pluginu ji nezřizuje.
+2. **SQLite badatelská DB přes MCP je autoritativní stav**. Lokální
+   `research.json`, `family_tree.py` a Gramps CLI z dalších oddílů jsou
+   **pouze offline / alternativní postupy**; jejich výstup není automaticky
+   synchronizován s živým MCP. Nepřepisovat autoritativní stav lokálním souborem.
+3. Striktně oddělovat větve `rev13_a` a `rev13_b`. Před zápisem potvrdit
+   větev, přesné existující ID a původ. Nikdy neslučovat automaticky podle jména.
+   Neznámé aktuální číslo revize/hash neodhadovat z `database_status`;
+   pokud je důležité, zjišťovat jej auditními nástroji.
+4. Pro celý archivní nález použít jedno `research_save_findings`:
+   `branch_key`, `idempotency_key`, `source`, `record`, `claims`,
+   případně `persons`, `transcription`, `translation`,
+   `interpretation`, `uncertainties`. Standardně nejprve náhled
+   `preview_only=true`; na výslovný příkaz **uložit** nastavit `false`
+   a zpětně ověřit výsledek. Dávkové uložení nevyžaduje separátní SHA
+   pro každé tvrzení. Tvrzení vznikají jako `unverified` a sama se
+   do Grampsu nepublikují.
+5. Zachovat nezávislé evidenční stavy `unverified/supported/rejected` a
+   `evidence_level`. Badatelská klasifikace DOLOŽENO / PRAVDĚPODOBNÉ /
+   HYPOTÉZA / NEVYŘEŠENO se z nich neodvozuje automaticky.
+6. Na výslovný publikační pokyn používat dostupné Gramps MCP nástroje.
+   Gramps musí umět zobrazit **i pracovní hypotézy a neověřené osoby**,
+   ale se zřetelným původem a označením nejistoty. Zamítnuté tvrzení
+   nezapisovat jako platný genealogický fakt. Rozpor 30/36 neřešit
+   výběrem jedné varianty. Číst [publikační pravidla](references/gramps.md).
+7. `gramps_publish_person` je pouze přímý zápis jedné osoby s předepsanými
+   poli, nikoli hromadný import nebo univerzální editor. Neznámá data
+   nedoplňovat kvůli povinným polím. `research_publish_to_gramps`
+   **dosud není dostupný MCP nástroj**; nevydávat neexistující automatický
+   export, tagování ani obousměrnou synchronizaci za hotové.
+8. Používat `gramps_status` a před změnou/po změně přesné ID v
+   `gramps_find` nebo `gramps_get`. Nespouštět zápis naslepo znovu po
+   nejasné odpovědi. Původní jednorázové povolení nelze převádět na trvalé.
+
 
 ## Načíst stav a určit cíl
 
 1. Určit konkrétní otázku: co se má přečíst nebo kterou vazbu máme ověřit.
    Nevyžadovat nový rodinný rozhovor, pokud zadání a podklady stačí.
-2. Při pokračování načíst aktuální soukromý badatelský stav a související snímky.
+2. Jen v offline režimu načíst soukromý badatelský stav a související snímky.
    Použít `scripts/family_tree.py --workspace <soukromá-složka> project resume`.
    Projít relevantní záznamy a události; nezačínat pouze podle paměti chatu.
 3. Není-li stav dostupný, dohledat jej v autorizovaném soukromém úložišti.
@@ -125,7 +167,7 @@ Při spojování generací, rozporech nebo mrtvém bodu číst
   Neměnit nejistotu na fakt jen podle uživatelovy preference.
 - Rodinné podání a cizí rodokmeny označit jako převzatá tvrzení, nikoli matriční doklad.
 
-## Spravovat obecný model
+## Spravovat obecný model (offline CLI)
 
 Při práci s více osobami, příbuzenskými vazbami, alternativními údaji nebo
 rozpory číst [referenci modelu](references/model.md).
@@ -141,7 +183,9 @@ rozpory číst [referenci modelu](references/model.md).
 - Model měnit atomicky příkazem `family_tree.py ... model apply`; před změnou
   vždy načíst aktuální revizi. Formát 1 migrovat pouze výslovným `project migrate`.
 
-## Uložit výsledek a umožnit navázání
+## Uložit výsledek a umožnit navázání (offline CLI)
+
+Při připojeném MCP použít postup z úvodní sekce `research_save_findings` místo lokálního `record put`.
 
 1. Připravit záznam podle `assets/record.json`; číst [datovou referenci](references/data.md).
    V soukromé složce vyplnit přepis, překlad, interpretaci, nejistoty a citaci.
@@ -172,16 +216,16 @@ rozpory číst [referenci modelu](references/model.md).
 10. Stručně shrnout zjištění, nejistoty, zdroj a další krok. Zobrazit relevantní výřez,
     pokud je dostupný a prostředí to podporuje. Nezveřejňovat soukromá data v repozitáři.
 
-## Publikovat podporovaná tvrzení do Gramps Web
+## Publikovat do Gramps Web včetně pracovních hypotéz
 
-Při výslovném požadavku na Gramps přečíst [referenci Gramps](references/gramps.md).
+Při výslovném požadavku na Gramps přečíst [referenci Gramps](references/gramps.md). Další kroky v tomto oddíle jsou **výhradně pro starší offline CLI adaptér**. Při dostupném MCP používat přednostně přímá API; pro neověřená tvrzení zachovat zřetelný status a vysvětlení.
 
-1. `research.json` zůstává autoritativním badatelským stavem; Gramps Web je
+1. V samostatném offline režimu `research.json` zůstává tamním autoritativním stavem; Gramps Web je
    odvozená soukromá vrstva.
 2. Nejprve spustit `gramps probe`. Heslo nedávat do argumentu, plánu ani logu.
 3. Vytvořit soukromý plán mimo Git příkazem `gramps plan` a zkontrolovat
    varování, vyloučená tvrzení a počty `create`, `unchanged`, `conflict`.
-4. Přenášet jen `supported` tvrzení mimo otevřené konflikty. Pracovní popisek
+4. V tomto **offline CLI adaptéru** se přenášejí jen `supported` tvrzení mimo otevřené konflikty; toto omezení neplatí jako obecný zákaz pracovních hypotéz v Grampsu. Pracovní popisek
    osoby nepovažovat za doložené jméno.
 5. `gramps push` použít jen na zkontrolovaný plán a testovací či zálohovaný
    strom. Adaptér nic nemaže ani nepřepisuje; kolizi řešit ručně.

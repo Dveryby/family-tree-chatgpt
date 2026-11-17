@@ -2,11 +2,11 @@
 
 Český genealogický asistent pro ChatGPT. Projekt připravuje převod postupů a nástrojů z [sarsonj/rodokmen-skill](https://github.com/sarsonj/rodokmen-skill) do prostředí ChatGPT.
 
-Aktuální verze: **0.5.0** (14. listopadu 2026).
+Aktuální verze: **0.6.0** (17. listopadu 2026).
 
 ## Stav
 
-Verze 0.5.0, připravená 14. listopadu 2026. Obsahuje převedený
+Verze 0.6.0, připravená 17. listopadu 2026. Obsahuje převedený
 pracovní postup pro jeden zápis, nástroj pro výřez snímku a lokální evidenci
 pramenů s historií. Ověřen je lokální export a obnova úplného stavu přes ZIP
 s kontrolními součty. Živý přístup a práce s jedním snímkem byly ověřeny pro
@@ -38,6 +38,18 @@ výzkum v ChatGPT/Codexu: od přijetí neověřeného tvrzení přes práci s pr
 přepis a posouzení totožnosti až po bezpečné uložení a pokračování. Konkrétní
 osoby z pilotních zápisů jsou testovací případy nástroje, nikoli výzkumný cíl
 projektu.
+
+## Novinky ve verzi 0.6.0 (MCP-first)
+
+- Priorita připojené badatelské SQLite DB přes Family Tree MCP 2.1;
+  `research_save_findings` ukládá celé nálezy atomicky a se správnou větví.
+- Čtení aktuálních záznamů, médií, důkazů a auditní historie přes MCP; lokální
+  `research.json`/CLI zůstává oddělený offline režim.
+- Gramps Web je vizuální pracovní rodokmen: dovoluje také neověřené osoby,
+  události a hypotézy s povinným označením stavu a citace.
+- Odmítnuté a rozporné varianty se bez rozřešení nepublikují jako platný fakt.
+- Hromadné `research_publish_to_gramps`, statusové tagy a obousměrná synchronizace
+  nejsou součástí dostupného MCP; popisuje se jejich nutná budoucí implementace.
 
 ## Novinky ve verzi 0.4.0
 
