@@ -1,6 +1,43 @@
-# Propojení s Gramps Web
+# Gramps Web: pracovní vizuální rodokmen a živé MCP
 
-První adaptér je záměrně jednosměrný a `append-only`. Převádí podporovaná
+Při připojeném Family Tree MCP 2.1 je **autoritativní** soukromá SQLite badatelská
+databáze. Gramps obsahuje vizuální obraz *doložených i neověřených* osob,
+událostí a rodinných vazeb. Pracovní hypotézy jsou pro další bádání užitečné,
+ale jejich nejistota musí zůstat viditelná.
+
+| Stav badatelského závěru | Co je přípustné publikovat |
+|---|---|
+| DOLOŽENO | Strukturovaná osoba, událost či vztah s citací |
+| PRAVDĚPODOBNÉ | Pracovní fakt s vysvětlením chybějícího důkazu |
+| HYPOTÉZA | Kandidát/vazba označená „HYPOTÉZA“ s prameny a protidůkazy |
+| NEVYŘEŠENO | Kandidát a poznámka „K OVĚŘENÍ“, bez výběru sporné hodnoty |
+| VYVRÁCENO | Jen badatelská historie/poznámka, ne aktivní fakt |
+
+Statusy SQLite `unverified/supported/rejected` a `evidence_level` nejsou
+totožné s výše uvedenými čtyřmi badatelskými úrovněmi. Nikdy je nepřeváděj
+mechanicky. Sporné čp. **30/36** například zobraz jako otevřený rozpor
+v poznámce, nikoli jako jistou hodnotu jednoho domu.
+
+**Aktuální MCP:** `gramps_status`, `gramps_list_trees`, `gramps_find`,
+`gramps_get` a `gramps_publish_person` (jedna osoba, náhled nebo výslovný
+zápis). `gramps_publish_person` vyžaduje jméno a příjmení, zdrojový popis
+a alespoň jednu životní událost. Neznámé datum **nesmí být vymyšleno** kvůli
+validaci. K neověřenému údaji vlož do `source_description` skutečný původ,
+stav, důvod nejistoty a další potřebné ověření; nepředstírej vytvoření
+samostatného Gramps tagu, pokud jej dané API opravdu nevytvořilo.
+
+Další typy objektů může podporovat oddělená cesta
+`gramps_prepare_write`/`gramps_commit_write`, která vyžaduje vlastní
+schválení. Po zápisu vždy znovu načti přesná ID a vazby. Automatický nástroj
+`research_publish_to_gramps` **zatím neexistuje**. Sériový export obou
+jistotních úrovní včetně tagů, citací, konfliktů, mapování stabilních ID
+a bezpečných oprav potřebuje samostatné rozšíření MCP; samotný plugin
+jej nemůže nahradit.
+
+## Starší samostatný offline CLI adaptér (platí omezení níže)
+
+
+Tento offline CLI adaptér je záměrně jednosměrný a `append-only`. Převádí podporovaná
 tvrzení z platného `research.json` formátu 2 do soukromých objektů Gramps Web.
 Nevytváří fakta z pracovních popisků, nic na serveru nemaže a existující
 neshodný objekt nepřepisuje.
@@ -122,7 +159,7 @@ je při vyřešení problému.
 
 ## Co se přenáší
 
-Do exportu vstoupí pouze tvrzení se stavem `supported`. Tvrzení v otevřeném
+Do **tohoto offline CLI exportu** vstoupí pouze tvrzení se stavem `supported`. Není to obecné pravidlo pro vizuální pracovní data v Grampsu. Tvrzení v otevřeném
 konfliktu se vyloučí; u vyřešeného konfliktu projdou jen výslovně preferovaná
 tvrzení. `unverified` a `rejected` se neposílají.
 
